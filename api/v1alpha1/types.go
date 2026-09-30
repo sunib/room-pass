@@ -1,6 +1,6 @@
 // Package v1alpha1 defines the Room Pass enrollment API.
 // +kubebuilder:object:generate=true
-// +groupName=roompass.configbutler.ai
+// +groupName=roompass.koudijs.dev
 package v1alpha1
 
 import (
@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-var GroupVersion = schema.GroupVersion{Group: "roompass.configbutler.ai", Version: "v1alpha1"}
+var GroupVersion = schema.GroupVersion{Group: "roompass.koudijs.dev", Version: "v1alpha1"}
 
 func AddToScheme(s *runtime.Scheme) error {
 	s.AddKnownTypes(GroupVersion, &Room{}, &RoomList{}, &Participant{}, &ParticipantList{})

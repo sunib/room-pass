@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/sunib/voter/room-pass/api/v1alpha1"
+	api "github.com/sunib/room-pass/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

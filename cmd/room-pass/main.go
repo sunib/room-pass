@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	api "github.com/sunib/voter/room-pass/api/v1alpha1"
-	"github.com/sunib/voter/room-pass/internal/controller"
-	"github.com/sunib/voter/room-pass/internal/server"
+	api "github.com/sunib/room-pass/api/v1alpha1"
+	"github.com/sunib/room-pass/internal/controller"
+	"github.com/sunib/room-pass/internal/server"
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/sunib/voter/room-pass/api/v1alpha1"
+	api "github.com/sunib/room-pass/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"

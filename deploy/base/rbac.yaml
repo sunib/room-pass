@@ -8,13 +8,13 @@ kind: Role
 metadata:
   name: room-pass
 rules:
-  - apiGroups: [roompass.configbutler.ai]
+  - apiGroups: [roompass.koudijs.dev]
     resources: [rooms]
     verbs: [get, list, watch]
-  - apiGroups: [roompass.configbutler.ai]
+  - apiGroups: [roompass.koudijs.dev]
     resources: [rooms/status]
     verbs: [get, update, patch]
-  - apiGroups: [roompass.configbutler.ai]
+  - apiGroups: [roompass.koudijs.dev]
     resources: [participants]
     verbs: [get, list, create]
   - apiGroups: ['']

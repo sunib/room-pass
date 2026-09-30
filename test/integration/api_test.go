@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/sunib/voter/room-pass/api/v1alpha1"
-	"github.com/sunib/voter/room-pass/internal/controller"
+	api "github.com/sunib/room-pass/api/v1alpha1"
+	"github.com/sunib/room-pass/internal/controller"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/sunib/voter/room-pass/api/v1alpha1"
+	api "github.com/sunib/room-pass/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"

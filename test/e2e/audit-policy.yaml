@@ -3,7 +3,7 @@ kind: Policy
 rules:
   - level: Metadata
     resources:
-      - group: roompass.configbutler.ai
+      - group: roompass.koudijs.dev
         resources: [rooms, rooms/status, participants]
       - group: ''
         resources: [secrets]

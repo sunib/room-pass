@@ -58,7 +58,7 @@ fi
 kubectl -n room-pass create secret tls local-tls --cert=.local/tls.crt --key=.local/tls.key --dry-run=client -o yaml | kubectl apply -f -
 ends_at=$(date -u -d '+4 hours' +%Y-%m-%dT%H:%M:%SZ)
 cat <<YAML | kubectl apply -f -
-apiVersion: roompass.configbutler.ai/v1alpha1
+apiVersion: roompass.koudijs.dev/v1alpha1
 kind: Room
 metadata:
   name: demo

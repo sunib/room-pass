@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	api "github.com/sunib/voter/room-pass/api/v1alpha1"
+	api "github.com/sunib/room-pass/api/v1alpha1"
 	"golang.org/x/oauth2"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"

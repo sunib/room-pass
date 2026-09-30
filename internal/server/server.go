@@ -19,8 +19,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/gorilla/securecookie"
-	api "github.com/sunib/voter/room-pass/api/v1alpha1"
-	"github.com/sunib/voter/room-pass/internal/controller"
+	api "github.com/sunib/room-pass/api/v1alpha1"
+	"github.com/sunib/room-pass/internal/controller"
 	"golang.org/x/text/unicode/norm"
 	"golang.org/x/time/rate"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

@@ -41,7 +41,7 @@ import (
 	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
-	api "github.com/sunib/voter/room-pass/api/v1alpha1"
+	api "github.com/sunib/room-pass/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"

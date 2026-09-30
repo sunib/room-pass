@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: participants.roompass.configbutler.ai
+  name: participants.roompass.koudijs.dev
 spec:
-  group: roompass.configbutler.ai
+  group: roompass.koudijs.dev
   names:
     kind: Participant
     listKind: ParticipantList

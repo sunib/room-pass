@@ -1,4 +1,4 @@
-module github.com/sunib/voter/room-pass
+module github.com/sunib/room-pass
 
 go 1.25.0
 
