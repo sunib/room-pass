@@ -72,7 +72,7 @@ spec:
   enrollment: Open
   maxParticipants: 300
   audienceGroup: demo:room-pass-test
-  allowedReturnURLs: [https://demo.roompass.test:18443/app/, 'https://app.roompass.test:18443/']
+  allowedReturnURLs: [https://demo.roompass.test:18443/app/]
 YAML
 docker build -t room-pass:dev .
 k3d image import room-pass:dev -c room-pass-e2e
@@ -91,27 +91,6 @@ printf 'Cluster ready. Kubeconfig: %s/.local/kubeconfig\n' "$PWD"
 
 # Browser client resolves the public issuer through the isolated Docker gateway.
 kubectl -n room-pass create configmap issuer-ca --from-file=ca.crt=.local/tls.crt --dry-run=client -o yaml | kubectl apply -f -
-
-# The real application, so the fixture can exercise the Voter session and its
-# live stream and not only the minimal demo client. Built from the repository
-# root because the image contains both the Go backend and the Vue bundle.
-docker build -t voter:dev -f ../voter/Dockerfile ..
-k3d image import voter:dev -c room-pass-e2e
-# Every examples.configbutler.ai CRD from the voter repository, which is where
-# all three are defined -- this fixture keeps no copy of its own, so an e2e run
-# cannot pass against a schema the application no longer ships.
-#
-# Applied and AWAITED before voter.yaml: a CRD and a custom resource of that
-# kind in one apply is a race the resource usually loses, rejected with "no
-# matches for kind" because the API server is not serving the type yet.
-kubectl apply -f ../voter/config/crd/
-kubectl wait --for=condition=Established \
-  crd/coffeeconfigs.examples.configbutler.ai \
-  crd/quizsessions.examples.configbutler.ai \
-  crd/quizsubmissions.examples.configbutler.ai --timeout=60s
-kubectl apply -f test/e2e/voter.yaml
-kubectl -n room-pass rollout restart deployment/voter
-kubectl -n room-pass rollout status deployment/voter --timeout=180s
 
 docker build -f test/e2e/demo-client/Dockerfile -t room-pass-demo-client:dev .
 k3d image import room-pass-demo-client:dev -c room-pass-e2e

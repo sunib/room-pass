@@ -12,12 +12,12 @@ kind: AuthenticationConfiguration
 jwt:
   - issuer:
       url: https://login.roompass.test:18443
-      # Both fixture clients: the minimal demo client and the real Voter app.
-      # A token whose aud is absent here is rejected outright -- correctly, but
-      # the symptom is only "self subject review: Unauthorized" in the Voter log
-      # while login itself still succeeds, because being unable to name your
+      # Every fixture client that sends its token to Kubernetes. A token whose
+      # aud is absent here is rejected outright -- correctly, but the symptom is
+      # only "self subject review: Unauthorized" in the application's log while
+      # login itself still succeeds, because being unable to name your
       # Kubernetes identity does not mean you have none.
-      audiences: [room-pass-demo, voter-fixture]
+      audiences: [room-pass-demo]
       audienceMatchPolicy: MatchAny
       certificateAuthority: |
 CA_PEM
