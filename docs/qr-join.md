@@ -111,7 +111,7 @@ The code rotates every `rotateEvery` and stays valid for `validFor`, so a
 screen as the code turns over:
 
 ```
-task room-pass:present BASE=https://app.example.com NEXT=/answer/round-1
+task present BASE=https://app.example.com NEXT=/answer/round-1
 ```
 
 That is `cmd/room-qr`, which follows the Room's status and redraws. `BASE` and

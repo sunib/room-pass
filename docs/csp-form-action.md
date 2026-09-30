@@ -94,7 +94,7 @@ Only capturing the browser console found it. `page.on("console")` should be
 standard in these specs; it is the only channel on which CSP speaks.
 
 This is the third failure of the same shape in two days — the
-[authenticator YAML](../../PLAN.md) and the k3d hang were the others. Something
+[authenticator YAML](https://github.com/sunib/voter/blob/main/PLAN.md) and the k3d hang were the others. Something
 fails closed and correctly, and reports a symptom that names the wrong
 component. The guards added alongside each fix matter as much as the fixes.
 

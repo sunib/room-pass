@@ -6,7 +6,7 @@ provider responsibilities. Recorded 2026-09-21.
 
 Related: [product vision](../PRODUCT-VISION.md),
 [extraction plan](../OPEN-SOURCE-PLAN.md), and
-[current authorization model](../../docs/authorization.md).
+[current authorization model](https://github.com/sunib/voter/blob/main/docs/authorization.md).
 
 ## Keep Dex and reconsider the integration separately
 

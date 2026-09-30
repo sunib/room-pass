@@ -1,8 +1,8 @@
 # Browser authentication tests
 
 ```bash
-task room-pass:e2e-up
-task test-browser
+task e2e-up
+task browser
 ```
 
 This runs real Chromium through Traefik, Room Pass, Dex and the local OIDC demo
@@ -10,7 +10,7 @@ client. The tests cover new enrollment, returning enrollment with the same
 Participant UID, invalid codes, tampered CSRF forms, secure enrollment-cookie flags and closed enrollment. A phone-sized viewport
 exercises the room form without mocking browser headers or the login protocol.
 
-The test runner reads only `room-pass/.local/kubeconfig`, never the current user
+The test runner reads only `.local/kubeconfig`, never the current user
 context. Kubernetes supplies the rotating code and verifies enrollment records.
 Tests delete only Participants with their unique test display name. The enrollment-closure
 test restores the prior enrollment setting in a finally block. Do not run

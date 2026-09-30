@@ -1,7 +1,23 @@
 # Room Pass open-source extraction plan
 
-Status: proposed, 2026-09-21. Documentation only; no extraction, repository
-creation, publication, or hosted operation has been performed by this plan.
+Status: in progress. Proposed 2026-09-21; extraction started 2026-09-30.
+
+Done in the first extraction commits:
+
+- History of `room-pass/` extracted from `github.com/sunib/voter` into
+  `github.com/sunib/room-pass`, and audited for private fixture data first.
+- Go module is `github.com/sunib/room-pass`. The API group moved from
+  `roompass.configbutler.ai` to `roompass.koudijs.dev`, which is a breaking
+  change and why the first release from here is 2.0.0.
+- Voter's consumer tests (voting, editor, operator, live stream, ballot load)
+  and `voter.yaml` stayed in Voter; the fixture no longer builds `../voter`.
+- Own Taskfile, devcontainer, lint configuration, CI, release automation and
+  license.
+
+Still open, from the list below: neutral demo policy (`demo:` groups and the
+`@koudijs.dev.test` suffix), a published non-Voter example, an upgrade and
+rollback proof, Voter consuming a released image, and removing the in-tree copy
+from Voter once it does.
 
 Read the [product vision](PRODUCT-VISION.md) for purpose and possible future
 hosting models. The [README](README.md) describes current operation.
@@ -39,14 +55,10 @@ proceed independently and is not required for the first standalone release.
 
 The service has its own Go module, Docker build context, CRDs, controller,
 enrollment UI, and minimal demo client. These are useful extraction boundaries.
-The development and demonstration paths still depend on the parent repository:
+What remained after the extraction commits:
 
 | Finding | Consequence |
 |---|---|
-| `test/e2e/up.sh` builds `../voter` and installs its CRDs | Copying this directory alone does not produce a runnable fixture |
-| Browser tests include voting, editor, and stream behavior | Separate product contract tests from consumer integration tests |
-| CI, devcontainer, lint configuration, image release tasks, and license are rooted above this directory | The extracted repository needs its own complete contributor and release setup |
-| Go module/imports use `github.com/sunib/voter/room-pass` | Choose a destination and update module paths consistently |
 | Synthetic email suffix is hardcoded in Go and browser preview | Choose neutral product behavior and keep the preview consistent |
 | Display names become normalized, unique participant identifiers | Decide and document collision, international-name, and cross-room behavior |
 | Deployment base omits the complete Dex/routing/TLS setup | Promote a complete example rather than presenting the base as a turnkey install |

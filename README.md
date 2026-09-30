@@ -1,8 +1,12 @@
 # Room Pass
 
-For the proposed standalone project, read the [product vision](PRODUCT-VISION.md)
-and [open-source extraction plan](OPEN-SOURCE-PLAN.md). These describe future
-direction; the implementation and operating limits below remain current.
+Room-code sign-in for applications, powered by Dex.
+
+Room Pass started inside [Voter](https://github.com/sunib/voter), the live-voting
+demo it was built for, and was extracted with its history on 2026-09-30. Voter
+is now a consumer like any other. The [product vision](PRODUCT-VISION.md) and
+[extraction plan](OPEN-SOURCE-PLAN.md) describe where it is going; the
+implementation and operating limits below are current.
 
 Room Pass enrolls a browser with a room code and an unverified display name, derives a
 synthetic address from that name, supplies the stable identity to Dex, and lets Kubernetes
@@ -15,14 +19,14 @@ Room, rolling codes and Participants; a Secret stores the cookie keys. Deploymen
 
 ## Run the complete local example
 
-From the repository root, in the shared devcontainer:
+In the devcontainer (`.devcontainer/`), from the repository root:
 
 ```sh
-task room-pass:test
-task room-pass:integration
-task room-pass:e2e-up
-task room-pass:e2e
-task room-pass:load  # optional 300-enrollment rehearsal; cleans up its records
+task test
+task integration
+task e2e-up
+task e2e
+task load  # optional 300-enrollment rehearsal; cleans up its records
 ```
 
 Prerequisites: Docker, k3d, kubectl, Go 1.25+, Task, Python 3, OpenSSL,
@@ -31,7 +35,7 @@ Prerequisites: Docker, k3d, kubectl, Go 1.25+, Task, Python 3, OpenSSL,
 [v2.45.1](https://github.com/dexidp/dex/releases/tag/v2.45.1).
 
 The dedicated `room-pass-e2e` cluster uses an explicit kubeconfig under
-`room-pass/.local/`; setup never selects another cluster or applies to the default
+`.local/`; setup never selects another cluster or applies to the default
 context. It leaves the cluster running for exploration. Images and local CA/keys stay
 local. The fixture uses a Docker volume, so it also works with the devcontainer's
 sibling Docker daemon. On this host, the runtime inotify instance limit was raised
@@ -39,7 +43,7 @@ from 128 to 1,024 to accommodate the additional cluster. Its TLS port is **18443
 
 For a browser, resolve `demo.roompass.test` and `login.roompass.test` to the Docker
 host (or `127.0.0.1` with a local tunnel forwarding port 18443). Trust the generated
-`room-pass/.local/tls.crt` in a dedicated test browser profile, then open:
+`.local/tls.crt` in a dedicated test browser profile, then open:
 
 **https://demo.roompass.test:18443/app/**
 
@@ -54,7 +58,7 @@ wonder what will end up on the commit.
 Read only the code needed for projection:
 
 ```sh
-export KUBECONFIG="$PWD/room-pass/.local/kubeconfig"
+export KUBECONFIG="$PWD/.local/kubeconfig"
 kubectl -n room-pass get room demo \
   -o jsonpath='{.spec.title}{"\n"}{.status.joinCode.code}{"\n"}{.status.joinCode.expiresAt}{"\n"}'
 kubectl -n demo get configmaps
@@ -63,7 +67,7 @@ kubectl -n demo get configmaps
 Or project a QR code instead, so nobody has to type anything but a name:
 
 ```sh
-task room-pass:present BASE=https://demo.roompass.test:18443 NEXT=/answer/round-1
+task present BASE=https://demo.roompass.test:18443 NEXT=/answer/round-1
 ```
 
 That follows the rotating code and redraws, under your own kubeconfig — a join code is
@@ -161,7 +165,7 @@ audit policy keeps enrollment codes and cookie Secret bodies out of audit logs.
 Regenerate checked-in CRDs and deepcopy implementations with:
 
 ```sh
-task room-pass:generate
+task generate
 ```
 
 CEL and OpenAPI validate bounds, enums, immutability and irreversible transitions at the
@@ -210,7 +214,7 @@ The local real-cluster rehearsal completed **300/300** enrollments in three batc
 of 100 from one source IP, with the final Traefik rate limit enabled: **p50 2.427s, p95 8.812s, max 10.119s**. The initial
 50-QPS/10-second configuration achieved only 265/300, which motivated the measured
 budget change. This is a local fixture result, not a conference capacity guarantee.
-`task room-pass:load` repeats it and removes only its own test participants afterwards.
+`task load` repeats it and removes only its own test participants afterwards.
 The separate race test uses a fake Kubernetes client and is not a capacity benchmark. Enrollment reads the current Room, lists retained Participants and
 creates one record under a single-process mutex; authorization reads Room + Participant.
 Revoked records still consume capacity. Status participantCount is observational only.
@@ -245,8 +249,8 @@ fixture after an irreversible stop, delete its Room before rerunning `e2e-up`, o
 only this disposable cluster:
 
 ```sh
-task room-pass:e2e-down
-task room-pass:e2e-up
+task e2e-down
+task e2e-up
 ```
 
 On a Docker host with many clusters, `failed to create fsnotify watcher: too many open
@@ -260,6 +264,6 @@ recreate the fixture to generate a new CA and trust it in the test browser.
 Room Pass now serves a separate Prometheus endpoint on port 9090. See
 [metrics](docs/metrics.md) for meanings, privacy guarantees and troubleshooting queries.
 
-Run `task room-pass:e2e-up` from the root, then `task test-browser` to watch the
+Run `task e2e-up`, then `task browser` to watch the
 room authentication contract exercised in Chromium. The
 [browser suite](test/browser/README.md) retains videos and a successful-login screenshot.

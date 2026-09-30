@@ -76,12 +76,12 @@ name, email, Room code, transaction ID, URL query, IP address or cookie value is
 exported. Unknown paths collapse into `other`. These restrictions prevent both
 credential disclosure and attacker-created label cardinality.
 
-`task room-pass:test` covers actual allowed/denied enrollment, CSRF rejection,
+`task test` covers actual allowed/denied enrollment, CSRF rejection,
 transport failure, route aggregation and scrape-time expiry. Browser tests exercise
-the flow these metrics describe. For a local scrape after `task room-pass:e2e-up`:
+the flow these metrics describe. For a local scrape after `task e2e-up`:
 
 ```bash
-kubectl --kubeconfig room-pass/.local/kubeconfig -n room-pass port-forward service/room-pass 9090:9090
+kubectl --kubeconfig .local/kubeconfig -n room-pass port-forward service/room-pass 9090:9090
 # In another terminal:
 curl http://localhost:9090/metrics
 ```
