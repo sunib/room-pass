@@ -1,0 +1,146 @@
+# Versions, and the tags a cluster can follow.
+#
+# release-please gives the image CI already built and tested a NUMBER, and the
+# number is what a cluster follows: k8s.koudijs.dev's Flux image automation
+# watches one major range of ghcr.io/sunib/room-pass and writes a bump back into
+# Git itself. A major release therefore never reaches it on its own.
+#
+# Carried over from github.com/sunib/voter, which released Room Pass 1.x
+# together with Voter. The first release from this repository is 2.0.0.
+# What is kept is the rule that matters -- a release is cut ONLY from a commit
+# whose full CI run went green.
+#
+# That rule is why this runs on workflow_run rather than on push. ci.yml already
+# describes what "green" means for this repository; triggering on its completion
+# reuses that answer instead of restating it, and no release can be cut past a
+# red build. The cost is that this workflow reads its commit from the triggering
+# run, never from the ref it happens to be checked out at.
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # The escape hatch, for when a release exists but its images do not.
+  #
+  # retag runs off release-please's output, so a release that was created any
+  # other way -- by hand, after a failure, or recovering from a release pull
+  # request release-please declined to recognise -- leaves version tags that
+  # point at nothing. This runs the retag half alone, against a commit you name.
+  # It cannot create or move a release; it only moves tags onto an image CI
+  # already built and tested.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag, without the v -- e.g. 1.1.0"
+        required: true
+        type: string
+      source_sha:
+        description: "Commit whose CI image to retag. Its sha-<short> tag must exist."
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: sunib
+
+permissions:
+  contents: read
+
+# Never cancel a release halfway through retagging; a following push queues.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # A failed, cancelled or skipped CI run releases nothing. workflow_run fires
+    # on every conclusion, so this is the gate, not a formality. A manual
+    # dispatch skips this job entirely: it retags, it does not release.
+    if: >-
+      ${{ github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Give the already-built image its version. NOTHING is rebuilt here: ci.yml
+  # published this exact digest as sha-<short> minutes ago, and a rebuild would
+  # produce a different artifact from the one that was tested. imagetools create
+  # writes new tags onto the same manifest.
+  #
+  retag:
+    name: Tag room-pass ${{ inputs.version || needs.release-please.outputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: release-please
+    # !cancelled() rather than a bare condition, because a manual dispatch
+    # SKIPS release-please and a skipped dependency would otherwise skip this
+    # job too.
+    if: >-
+      ${{ !cancelled()
+          && (needs.release-please.outputs.release_created == 'true'
+              || github.event_name == 'workflow_dispatch') }}
+    permissions:
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Log in to the container registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login "${REGISTRY}" -u "${{ github.actor }}" --password-stdin
+
+      - name: Move the version tags onto the tested digest
+        id: retag
+        env:
+          # The commit CI actually ran on, not whatever main points at now --
+          # or the one named by hand on a dispatch.
+          HEAD_SHA: ${{ inputs.source_sha || github.event.workflow_run.head_sha }}
+          VERSION: ${{ inputs.version || needs.release-please.outputs.version }}
+          IMAGE: room-pass
+        run: |
+          set -euo pipefail
+          REPO="${REGISTRY}/${IMAGE_OWNER}/${IMAGE}"
+          SOURCE="${REPO}:sha-${HEAD_SHA:0:7}"
+          MAJOR="${VERSION%%.*}"
+          MINOR="${VERSION%.*}"
+
+          # Fail loudly rather than tag nothing: if ci.yml did not publish this
+          # image, the release must not look like it shipped one.
+          docker buildx imagetools inspect "${SOURCE}" > /dev/null
+
+          docker buildx imagetools create \
+            -t "${REPO}:${VERSION}" \
+            -t "${REPO}:${MINOR}" \
+            -t "${REPO}:${MAJOR}" \
+            "${SOURCE}"
+
+          DIGEST="$(docker buildx imagetools inspect "${REPO}:${VERSION}" \
+            --format '{{json .Manifest.Digest}}' | tr -d '"')"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### ${IMAGE} ${VERSION}"
+            echo
+            echo "Tagged \`${VERSION}\`, \`${MINOR}\` and \`${MAJOR}\` onto the digest CI tested."
+            echo
+            echo '```text'
+            echo "${REPO}:${VERSION}@${DIGEST}"
+            echo '```'
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"

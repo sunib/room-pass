@@ -1,2 +1,11 @@
+# Fixture state: kubeconfigs, TLS keys and cookie keys for the local k3d cluster.
 .local/
 bin/
+.task/
+# Local devcontainer environment (GH_TOKEN etc). Never commit.
+.env
+*.ignore.*
+
+node_modules/
+test/browser/test-results/
+test/browser/playwright-report/

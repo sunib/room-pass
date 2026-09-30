@@ -1,8 +1,27 @@
-# Room Pass tasks. Included by the root Taskfile with dir: ./room-pass, so every
-# command here runs with this directory as the working directory.
+# Task vocabulary for Room Pass, and the CI contract.
+#
+# The GitHub workflow in .github/workflows/ci.yml does not know how to lint or
+# test anything: it builds the container from .devcontainer/Dockerfile and runs
+# these tasks inside it. So every check CI performs is reproducible with the
+# identical command locally.
 version: '3'
 
+vars:
+  # Publishing target. Overridable so the same tasks can push to a local k3d
+  # registry or another registry.
+  REGISTRY: '{{.REGISTRY | default "ghcr.io"}}'
+  IMAGE_OWNER: '{{.IMAGE_OWNER | default "sunib"}}'
+  # Add linux/arm64 here when something actually needs to run on it --
+  # multi-arch doubles every build.
+  PLATFORMS: '{{.PLATFORMS | default "linux/amd64"}}'
+
 tasks:
+  default:
+    desc: List the available tasks
+    silent: true
+    cmds:
+      - task --list
+
   deps:
     desc: Download Go module dependencies
     sources:
@@ -21,21 +40,39 @@ tasks:
     desc: Fail if the committed CRDs and deepcopy code are stale
     # CI runs this so a change to api/v1alpha1 that was never regenerated shows up
     # in review, rather than as a controller that silently rejects a field the CRD
-    # does not know about. Fix a failure with `task room-pass:generate` and commit.
+    # does not know about. Fix a failure with `task generate` and commit.
     cmds:
       - task: generate
       - |
         if ! git diff --quiet -- api config/crd; then
-          echo "::error::Generated files are stale. Run 'task room-pass:generate' and commit the result." >&2
+          echo "::error::Generated files are stale. Run 'task generate' and commit the result." >&2
           git --no-pager diff -- api config/crd
           exit 1
         fi
         echo "generated files are current"
 
   lint:
-    desc: Lint with golangci-lint (config is the repository root .golangci.yml)
+    desc: Run every linter (Go, Dockerfiles, workflows)
+    cmds:
+      - task: lint-golang
+      - task: lint-dockerfiles
+      - task: lint-actions
+
+  lint-golang:
+    desc: Lint with golangci-lint (config in .golangci.yml)
     cmds:
       - golangci-lint run ./...
+
+  lint-dockerfiles:
+    desc: Lint both Dockerfiles with hadolint (config in .hadolint.yaml)
+    cmds:
+      - hadolint .devcontainer/Dockerfile Dockerfile
+
+  lint-actions:
+    desc: Lint the GitHub Actions workflows with actionlint
+    # No path argument: actionlint discovers everything under .github/workflows.
+    cmds:
+      - actionlint
 
   lint-fix:
     desc: Apply golangci-lint's automatic fixes
@@ -73,7 +110,7 @@ tasks:
     # this tool cannot guess, and guessing it would print a QR code that quietly
     # sends the room somewhere else.
     #
-    #   task room-pass:present BASE=https://app.example.com NEXT=/answer/round-1
+    #   task present BASE=https://app.example.com NEXT=/answer/round-1
     vars:
       BASE: '{{.BASE}}'
       NEXT: '{{.NEXT | default "/"}}'
@@ -84,11 +121,59 @@ tasks:
       - go run ./cmd/room-qr --base {{.BASE}} --next {{.NEXT}} --room {{.ROOM}} --namespace {{.ROOM_NAMESPACE}} --login-path {{.LOGIN_PATH}}
 
   image:
-    desc: Build the standalone Room Pass image
-    # The published image is built by the root `task image-room-pass`, which stamps
-    # version/revision labels. This is the quick local variant.
+    desc: Build the Room Pass image (ghcr.io/sunib/room-pass)
+    # CI calls exactly this task with PUSH=true, so a local build and the
+    # published image are produced by the same command with the same build args.
+    #
+    #   task image                          # build, load into local docker
+    #   task image TAG=test PUSH=true       # build and push
+    vars:
+      TAG: '{{.TAG | default "dev"}}'
+      PUSH: '{{.PUSH | default "false"}}'
+      IMAGE: '{{.REGISTRY}}/{{.IMAGE_OWNER}}/room-pass'
+      # EXTRA_TAGS: newline- or space-separated additional full image refs.
+      EXTRA_TAGS: '{{.EXTRA_TAGS | default ""}}'
+      # METADATA_FILE: buildx writes the pushed digest here, for CI to report.
+      METADATA_FILE: '{{.METADATA_FILE | default ""}}'
     cmds:
-      - docker build -t room-pass:dev .
+      - |
+        set -euo pipefail
+        GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+        args=(
+          --platform "{{.PLATFORMS}}"
+          --build-arg "VERSION={{.TAG}}"
+          --build-arg "GIT_COMMIT=${GIT_COMMIT}"
+          --build-arg "BUILD_DATE=${BUILD_DATE}"
+          --label "org.opencontainers.image.source=https://github.com/sunib/room-pass"
+          --label "org.opencontainers.image.revision=$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+          --label "org.opencontainers.image.created=${BUILD_DATE}"
+          --tag "{{.IMAGE}}:{{.TAG}}"
+        )
+        for extra in {{.EXTRA_TAGS}}; do args+=(--tag "${extra}"); done
+        {{if .METADATA_FILE}}args+=(--metadata-file "{{.METADATA_FILE}}"){{end}}
+        {{if eq .PUSH "true"}}
+        args+=(--push)
+        {{else}}
+        # --load only accepts a single platform.
+        case "{{.PLATFORMS}}" in *,*) : ;; *) args+=(--load) ;; esac
+        {{end}}
+
+        echo "Building {{.IMAGE}}:{{.TAG}} ({{.PLATFORMS}})"
+        docker buildx build "${args[@]}" .
+
+  ci-image:
+    desc: Build the CI stage of the devcontainer image (what CI runs tasks inside)
+    vars:
+      CI_IMAGE: '{{.CI_IMAGE | default "room-pass-ci:local"}}'
+    cmds:
+      - docker build --target ci -f .devcontainer/Dockerfile -t {{.CI_IMAGE}} .
+
+  clean:
+    desc: Remove build output and task fingerprints
+    cmds:
+      - rm -rf .task bin
 
   e2e-up:
     desc: Build and start the isolated Room Pass OIDC demo cluster
