@@ -98,3 +98,39 @@ kubectl apply -f test/e2e/demo-client.yaml
 kubectl -n room-pass patch deployment demo-client --type=merge -p "{\"spec\":{\"template\":{\"spec\":{\"hostAliases\":[{\"ip\":\"$gateway\",\"hostnames\":[\"login.room-pass.test\"]}]}}}}"
 kubectl -n room-pass rollout restart deployment/demo-client
 kubectl -n room-pass rollout status deployment/demo-client --timeout=120s
+
+# Ready, from where the browser stands. A finished rollout says the pods are up;
+# it does not say Traefik routes to them. In that gap Traefik answers for itself
+# -- 404 before it has loaded a route, 502 while an endpoint still points at a
+# pod that `rollout restart` is terminating -- and a browser test that starts
+# there fails on its first page. Neither status says the application is up, so
+# wait for what the browser gets: the whole redirect chain, with cookies, ending
+# on the join page with its "Room code" field. Three times running, so one lucky
+# answer from a pod on its way out does not count.
+probe() {
+  local jar body
+  jar=$(mktemp); body=$(mktemp)
+  status=$(curl -sk -L -c "$jar" -b "$jar" -o "$body" -w '%{http_code}' \
+    --resolve "demo.room-pass.test:18443:$gateway" \
+    --resolve "login.room-pass.test:18443:$gateway" \
+    https://demo.room-pass.test:18443/app/login || true)
+  local ok=1
+  if [ "$status" = 200 ] && grep -q 'Room code' "$body"; then ok=0; fi
+  rm -f "$jar" "$body"
+  return "$ok"
+}
+streak=0
+for attempt in $(seq 1 90); do
+  if probe; then
+    streak=$((streak + 1))
+    if [ "$streak" -ge 3 ]; then
+      echo "Fixture serves the join page through Traefik (attempt ${attempt})."
+      exit 0
+    fi
+  else
+    streak=0
+  fi
+  sleep 2
+done
+echo "ERROR: the join page was not served three times running within 180s (last answer: HTTP ${status})." >&2
+exit 1
