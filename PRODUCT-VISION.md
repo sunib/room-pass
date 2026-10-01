@@ -121,7 +121,7 @@ The trusted-header boundary is essential: public callers cannot supply identity
 headers, and Dex must not be directly reachable through an alternative public
 route. Room Pass strips incoming identity headers and constructs the assertion
 itself. See the [handoff protocol](docs/handoff.md) and
-[fixture connector configuration](test/e2e/dex.yaml) for the implemented details.
+[connector configuration](deploy/example/dex-config.yaml) for the implemented details.
 
 For the initial product, make this dependency explicit and ship the tested
 Room Pass + Dex combination. Supporting another issuer would require a separate

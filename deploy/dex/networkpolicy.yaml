@@ -1,0 +1,25 @@
+# THE boundary that makes the authproxy connector safe. authproxy does not
+# authenticate anything: it believes the X-Remote-* headers on its callback.
+# Room Pass is the only thing that may set them, so it is the only thing that
+# may reach Dex at all. Anything else that can dial this pod can mint a
+# participant token for a name it made up, without a room code.
+#
+# This needs a CNI that enforces NetworkPolicy. Without one this object is
+# accepted and does nothing; test/network shows what a working one refuses.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dex-only-from-room-pass
+spec:
+  podSelector:
+    matchLabels:
+      app: dex
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: room-pass
+      ports:
+        - protocol: TCP
+          port: 5556

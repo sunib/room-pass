@@ -10,7 +10,7 @@ if ! k3d cluster list -o json | python3 -c 'import json,sys;sys.exit(not any(c["
   docker volume create room-pass-e2e-config >/dev/null
   docker run --rm -i -v room-pass-e2e-config:/config alpine:3.21 sh -c 'cat > /config/ca.crt' < .local/tls.crt
   docker run --rm -i -v room-pass-e2e-config:/config alpine:3.21 sh -c 'cat > /config/audit-policy.yaml' < test/e2e/audit-policy.yaml
-  python3 -c 'from pathlib import Path; p=Path("test/e2e/authentication-config.yaml").read_text(); ca=Path(".local/tls.crt").read_text(); Path(".local/authentication-config.yaml").write_text(p.replace("CA_PEM", "\n".join("        "+line for line in ca.splitlines())))'
+  python3 test/e2e/render-authentication-config.py .local/tls.crt .local/authentication-config.yaml
   # Parse the RENDERED config before handing it to the apiserver. A malformed
   # authenticator does not fail loudly: k3s exits, k3d keeps waiting for an API
   # that will never answer, and the whole thing looks like a slow cluster. That
@@ -48,10 +48,31 @@ if [ -f /.dockerenv ]; then
 fi
 export KUBECONFIG="$PWD/.local/kubeconfig"
 kubectl wait --for=condition=Ready node/k3d-room-pass-e2e-server-0 --timeout=90s
+# Wait for CRDs to be Established by polling, not with `kubectl wait`: until the
+# apiserver writes a just-created CRD's first status, wait fails at once on the
+# missing conditions instead of waiting for them. That raced on CI.
+wait_established() {
+  local crd status
+  for crd in "$@"; do
+    status=""
+    for attempt in $(seq 1 60); do
+      status=$(kubectl get crd "$crd" -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' 2>/dev/null || true)
+      if [ "$status" = True ]; then break; fi
+      sleep 2
+    done
+    if [ "$status" != True ]; then
+      echo "ERROR: CRD $crd was not Established within 120s." >&2
+      exit 1
+    fi
+  done
+}
 kubectl apply -k config/crd
-# A Room applied in the same breath as its new CRD can fail with "no matches for
+# A Room applied in the same breath as its new CRD fails with "no matches for
 # kind": the apiserver serves the type only once the CRD is Established.
-kubectl wait --for=condition=Established --timeout=60s crd/rooms.room-pass.koudijs.dev crd/participants.room-pass.koudijs.dev
+wait_established rooms.room-pass.koudijs.dev participants.room-pass.koudijs.dev
+# The overlay carries Traefik Middlewares, whose CRD k3s's Helm controller
+# installs asynchronously during bootstrap.
+wait_established middlewares.traefik.io
 kubectl apply -k test/e2e/room-pass
 if ! kubectl -n room-pass get secret room-pass-cookie >/dev/null 2>&1; then
   openssl rand 32 > .local/hash-key
@@ -79,16 +100,11 @@ spec:
 YAML
 docker build -t room-pass:dev .
 k3d image import room-pass:dev -c room-pass-e2e
-# Helm installs Traefik CRDs asynchronously during k3s bootstrap.
-for attempt in $(seq 1 45); do
-  if kubectl get crd middlewares.traefik.io >/dev/null 2>&1; then break; fi
-  sleep 2
-done
-kubectl wait --for=condition=Established crd/middlewares.traefik.io --timeout=30s
-kubectl apply -f test/e2e/dex.yaml -f test/e2e/edge.yaml
-kubectl -n room-pass rollout restart deployment/dex
+kubectl apply -f test/e2e/demo-rbac.yaml
 kubectl -n room-pass rollout restart deployment/room-pass
 kubectl -n room-pass rollout status deployment/room-pass --timeout=180s
+# Dex is not restarted: its config is a generated ConfigMap, so a change to it
+# rolls Dex by itself, and its SQLite store keeps signing keys across restarts.
 kubectl -n room-pass rollout status deployment/dex --timeout=180s
 printf 'Cluster ready. Kubeconfig: %s/.local/kubeconfig\n' "$PWD"
 

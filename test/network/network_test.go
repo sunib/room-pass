@@ -1,6 +1,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -54,15 +55,16 @@ func TestDexNetworkBoundary(t *testing.T) {
 	for _, ns := range []string{"dex", "voter", "traefik-system", "web-preview-pr-123"} {
 		create(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
 	}
-	// Reuse the real Dex image/config from the login fixture, excluding its
-	// different (Room Pass only) policy. Deliberately change the pod labels: the
-	// platform policy must select ALL pods in dex, independent of chart labels.
-	raw, err := os.Open("../e2e/dex.yaml")
+	// Reuse the real Dex image/config from the login fixture's installation
+	// (deploy/dex, as test/e2e/room-pass configures it), excluding its
+	// different (Room Pass only) policy and everything that is not Dex.
+	// Deliberately change the pod labels: the platform policy must select ALL
+	// pods in dex, independent of chart labels.
+	rendered, err := exec.Command("kustomize", "build", "../e2e/room-pass").Output()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("kustomize build ../e2e/room-pass: %v", err)
 	}
-	defer raw.Close()
-	decoder := kyaml.NewYAMLOrJSONDecoder(raw, 4096)
+	decoder := kyaml.NewYAMLOrJSONDecoder(bytes.NewReader(rendered), 4096)
 	for {
 		var obj runtime.RawExtension
 		if err := decoder.Decode(&obj); err == io.EOF {
@@ -70,11 +72,24 @@ func TestDexNetworkBoundary(t *testing.T) {
 		} else if err != nil {
 			t.Fatal(err)
 		}
-		var meta metav1.TypeMeta
+		var meta struct {
+			metav1.TypeMeta   `json:",inline"`
+			metav1.ObjectMeta `json:"metadata"`
+		}
 		if err := yaml.Unmarshal(obj.Raw, &meta); err != nil {
 			t.Fatal(err)
 		}
+		if meta.Name != "dex" && !strings.HasPrefix(meta.Name, "dex-") {
+			continue
+		}
 		switch meta.Kind {
+		case "PersistentVolumeClaim":
+			pvc := &corev1.PersistentVolumeClaim{}
+			if err := yaml.Unmarshal(obj.Raw, pvc); err != nil {
+				t.Fatal(err)
+			}
+			pvc.Namespace = "dex"
+			create(pvc)
 		case "ConfigMap":
 			cm := &corev1.ConfigMap{}
 			if err := yaml.Unmarshal(obj.Raw, cm); err != nil {

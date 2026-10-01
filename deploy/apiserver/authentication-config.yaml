@@ -1,0 +1,73 @@
+# The kube-apiserver's structured authentication configuration for a Room Pass
+# issuer: pass it with --authentication-config=<this file> on every
+# control-plane node. Kubernetes 1.34 and later read apiserver.config.k8s.io/v1;
+# 1.30 to 1.33 need v1beta1 with the same content (the local fixture runs 1.31).
+#
+# Replace https://login.example.com with ISSUER_ORIGIN and my-app with the Dex
+# client ID of every application that sends a participant's token to
+# Kubernetes. The apiserver fetches the issuer's keys from that URL, so it must
+# resolve and be reachable FROM THE CONTROL PLANE, not only from browsers.
+# If it is not, the authenticator never loads its keys and every participant
+# token is rejected while login itself appears to work.
+#
+# What separates a participant from anyone else on this issuer is the connector
+# that minted the token, which Dex reports in federated_claims.connector_id and
+# nothing in the request path can forge. Every rule below keys on it.
+#
+# To add an operator connector (GitHub, your company IdP) to the same Dex, add
+# its id in three places and keep the containment rule as it is:
+#   1. the connector list in the first claimValidationRule;
+#   2. a branch in claimMappings.username with its own prefix (github:, ...);
+#   3. that prefix in the first userValidationRule.
+apiVersion: apiserver.config.k8s.io/v1
+kind: AuthenticationConfiguration
+jwt:
+  - issuer:
+      url: https://login.example.com
+      audiences: [my-app]
+      audienceMatchPolicy: MatchAny
+      # certificateAuthority: only for an issuer certificate that a public CA
+      # did not sign, as in the local fixture.
+    claimValidationRules:
+      # Fail closed on a missing connector. Dex only emits federated_claims when
+      # the client requests the "federated:id" scope, so a client that forgets
+      # it is rejected here with a message that names the fix.
+      - expression: "has(claims.federated_claims) && claims.federated_claims.connector_id in ['room-pass']"
+        message: "unknown or missing Dex connector; the client must request the federated:id scope"
+      # Containment. The room-pass connector authenticates on trusted headers,
+      # so its groups may only ever be demo: groups. If every routing and network
+      # control in front of Dex failed, this rule still keeps a forged identity
+      # out of every group your platform binds.
+      - expression: "claims.federated_claims.connector_id != 'room-pass' || dyn(claims.groups).all(g, g.startsWith('demo:'))"
+        message: "the room-pass connector may only assert demo groups"
+    claimMappings:
+      # Dex's opaque subject, never the display name a participant typed.
+      username:
+        expression: >-
+          claims.federated_claims.connector_id == 'room-pass'
+            ? 'demo:' + claims.sub
+            : 'unknown:' + claims.federated_claims.connector_id
+      groups:
+        claim: groups
+        prefix: ''
+      # Attribution for audit events (and anything that reads them, such as a
+      # Git mirror). The address is synthetic and carries no authorization
+      # weight, although Dex's authproxy connector marks it verified.
+      #
+      # The email-verified entry is not decoration: the apiserver refuses to
+      # start an authenticator that reads claims.email without referencing
+      # claims.email_verified somewhere.
+      extra:
+        - key: configbutler.ai/claims/display-name
+          valueExpression: "claims.?name.orValue('')"
+        - key: configbutler.ai/claims/email
+          valueExpression: "claims.?email.orValue('')"
+        - key: configbutler.ai/claims/email-verified
+          valueExpression: "claims.?email_verified.orValue(false) ? 'true' : ''"
+    userValidationRules:
+      - expression: "user.username.startsWith('demo:')"
+        message: "username must carry a connector prefix"
+      - expression: "!user.username.startsWith('system:')"
+        message: "username must not use the Kubernetes system: prefix"
+      - expression: "user.groups.all(group, !group.startsWith('system:'))"
+        message: "groups must not use the Kubernetes system: prefix"

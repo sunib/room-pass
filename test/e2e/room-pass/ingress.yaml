@@ -1,0 +1,51 @@
+# deploy/example/ingress.yaml for the fixture's hosts, with one difference: no
+# header-stripping middleware. The e2e suite sends forged X-Remote-* headers and
+# must see Room Pass itself discard them; stripping them at the edge first
+# would make that check pass without testing anything.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: room-pass
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: room-pass-room-pass-edge-limit@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - secretName: local-tls
+      hosts: [demo.room-pass.test, login.room-pass.test]
+  rules:
+    - host: demo.room-pass.test
+      http:
+        paths:
+          - path: /bind
+            pathType: Exact
+            backend:
+              service:
+                name: room-pass
+                port:
+                  name: http
+          - path: /join
+            pathType: Exact
+            backend:
+              service:
+                name: room-pass
+                port:
+                  name: http
+          - path: /logout
+            pathType: Exact
+            backend:
+              service:
+                name: room-pass
+                port:
+                  name: http
+    - host: login.room-pass.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: room-pass
+                port:
+                  name: http

@@ -1,0 +1,30 @@
+# Dex for the fixture: deploy/example/dex-config.yaml with this environment's
+# issuer and a public PKCE client for the demo client and the device flow.
+issuer: https://login.room-pass.test:18443
+storage:
+  type: sqlite3
+  config:
+    file: /var/dex/dex.db
+web:
+  http: 0.0.0.0:5556
+expiry:
+  idTokens: 5m
+oauth2:
+  skipApprovalScreen: true
+staticClients:
+  - id: room-pass-demo
+    name: Room Pass demo
+    public: true
+    redirectURIs:
+      - https://demo.room-pass.test:18443/app/callback
+      - /device/callback
+connectors:
+  - type: authproxy
+    id: room-pass
+    name: Join the room
+    config:
+      userIDHeader: X-Remote-User-Id
+      userHeader: X-Remote-User
+      userNameHeader: X-Remote-User-Name
+      emailHeader: X-Remote-User-Email
+      groupHeader: X-Remote-Group

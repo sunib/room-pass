@@ -1,0 +1,27 @@
+# A generous per-source bucket: a conference NAT is one source address for the
+# whole room. Room Pass separately limits code attempts and handoff creation
+# across all sources, which is the limit that protects enrollment.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: room-pass-edge-limit
+spec:
+  rateLimit:
+    average: 200
+    burst: 500
+---
+# Dex's authproxy connector turns X-Remote-* into an identity, so nothing from a
+# browser may carry them. Room Pass overwrites them itself; this is the outer of
+# the two controls. An empty value makes Traefik remove the header.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: room-pass-strip-identity-headers
+spec:
+  headers:
+    customRequestHeaders:
+      X-Remote-User: ""
+      X-Remote-User-Id: ""
+      X-Remote-User-Name: ""
+      X-Remote-User-Email: ""
+      X-Remote-Group: ""

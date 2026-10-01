@@ -119,11 +119,12 @@ tasks:
 
   lint-kustomize:
     desc: Build every kustomization, so a broken base fails here and not in a consumer's cluster
-    # config/crd and deploy/base are what consumers point their own overlays at;
-    # test/e2e/room-pass is the fixture's overlay on top of the base.
+    # config/crd and the deploy/ components are what consumers point their own
+    # overlays at; deploy/example is the install guide's overlay, which nothing
+    # else builds; test/e2e/room-pass is the fixture's.
     deps: [manifests]
     cmds:
-      - for: [config/crd, deploy/base, test/e2e/room-pass]
+      - for: [config/crd, deploy/base, deploy/dex, deploy/edge/traefik, deploy/example, test/e2e/room-pass]
         cmd: kustomize build {{.ITEM}} > /dev/null
 
   lint:

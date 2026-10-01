@@ -118,26 +118,26 @@ provide a work identity provider. Those remain platform integration work.
 
 ## Kubernetes API and deployment
 
-Both `config/crd` and `deploy/base` are kustomize bases (`config/crd` from the first
-release after 2.0.0), so an overlay can name them remotely at a release tag:
+An installation is a few kustomize components, each usable as a remote base at a
+release tag (`https://github.com/sunib/room-pass//deploy/base?ref=vX.Y.Z`; `config/crd`
+and the components below from the first release after 2.0.0):
 
-```yaml
-# kustomization.yaml in your environment
-resources:
-  - https://github.com/sunib/room-pass//config/crd?ref=vX.Y.Z
-  - https://github.com/sunib/room-pass//deploy/base?ref=vX.Y.Z
-patches:
-  - path: room-pass-environment.yaml
-```
+| Component | What it is |
+|---|---|
+| [config/crd](config/crd) | the Room and Participant CRDs; apply first and wait for them to be Established |
+| [deploy/base](deploy/base) | Room Pass, its ServiceAccount and RBAC, with no hostnames |
+| [deploy/dex](deploy/dex) | Dex on SQLite with a NetworkPolicy admitting only Room Pass; its config is yours |
+| [deploy/edge/traefik](deploy/edge/traefik) | the edge rate limit and identity-header stripping, as Traefik Middlewares |
+| [deploy/apiserver](deploy/apiserver/authentication-config.yaml) | the kube-apiserver's structured authentication config for the issuer |
+| [deploy/example](deploy/example) | all of the above for one event, with placeholder hosts, plus a Room |
 
-The base carries no hostnames. `JOIN_ORIGIN`, `ISSUER_ORIGIN` and `ALLOWED_RETURN_URLS`
+The local fixture deploys the same components ([test/e2e/room-pass](test/e2e/room-pass)),
+so CI runs them on every change. `JOIN_ORIGIN`, `ISSUER_ORIGIN` and `ALLOWED_RETURN_URLS`
 are required, and Room Pass refuses to start without them; add them with a
 strategic-merge patch on the `room-pass` container's `env`, which merges by name, so a
-variable added to the base later still arrives. Override `DEX_UPSTREAM`, `ROOM_NAME` and
-the image the same way. [test/e2e/room-pass](test/e2e/room-pass) is a working overlay.
-Apply the CRDs and wait for them to be Established before the first Room. Apply a Room with a future end
-time, a demo-prefixed group, and exact HTTPS return URLs included in that platform
-allowlist. `test/e2e/up.sh` contains a runnable Room example. Required cookie Secret:
+variable added to the base later still arrives. A Room needs a future end time, a
+`demo:`-prefixed group, and exact HTTPS return URLs that also appear in
+`ALLOWED_RETURN_URLS`. Required cookie Secret:
 
 ```sh
 umask 077
@@ -151,10 +151,9 @@ rm hash-key block-key
 Keep keys out of Git, logs and image layers. Back up the Secret together with Rooms and
 Participants using your Kubernetes/etcd backup process. A restart preserves enrollment;
 losing or replacing keys signs everyone out. Rotation with multiple verification keys is
-not implemented. The local fixture preserves these keys on repeated `e2e-up` runs. Dex itself uses
-ephemeral in-memory storage **only in this fixture**; its restart resets signing keys
-and unfinished OAuth transactions. Use a supported persistent Dex storage backend for
-a deployed event. `e2e-up` restarts the fixture services to load source/config changes.
+not implemented. The local fixture preserves these keys on repeated `e2e-up` runs.
+`deploy/dex` keeps Dex's signing keys and pending logins in SQLite on a volume, so a Dex
+restart does not sign applications out. `e2e-up` restarts Room Pass to load source changes.
 
 Build Room Pass independently:
 
@@ -200,18 +199,21 @@ the [CHANGELOG](CHANGELOG.md) lists the steps. Two things it does not say:
 
 See [the handoff protocol](docs/handoff.md). **All public issuer traffic must go through
 Room Pass**, including callback aliases. Do not expose Dex with another Ingress,
-NodePort, LoadBalancer or port-forward. The fixture's Traefik routes send both hosts to
-Room Pass, and its NetworkPolicy admits Dex traffic only from Room Pass pods. This
+NodePort, LoadBalancer or port-forward. [deploy/example](deploy/example/ingress.yaml) routes
+the whole issuer host to Room Pass, and [deploy/dex](deploy/dex/networkpolicy.yaml) admits
+Dex traffic only from Room Pass pods. This
 requires a CNI that enforces NetworkPolicy; k3s's network policy controller is enabled.
 Treat permission to label/create Room Pass pods or alter these routes/policies as trusted
 operator access.
 
-Dex uses one `authproxy` connector with ID `room`. Optional Dex browser sessions remain
-disabled; authproxy does not issue refresh tokens. Configure the exact header names in
-[test/e2e/dex.yaml](test/e2e/dex.yaml). Room Pass overwrites the entire `X-Remote-*`
+Dex uses one `authproxy` connector with ID `room-pass`, which makes its callback
+`/callback/room-pass`. Optional Dex browser sessions remain disabled; authproxy does not
+issue refresh tokens. Configure the exact header names in
+[deploy/example/dex-config.yaml](deploy/example/dex-config.yaml). Room Pass overwrites the entire `X-Remote-*`
 contract from fresh Room/Participant reads. No public forward-auth header endpoint exists.
 
-The fixture configures native JWT authentication, `demo:` usernames, Room-selected demo
+[deploy/apiserver](deploy/apiserver/authentication-config.yaml), which the fixture's
+apiserver also runs, configures native JWT authentication, `demo:` usernames, Room-selected demo
 groups and `configbutler.ai/claims/display-name` / `configbutler.ai/claims/email` audit
 extras. Kubernetes uses Dex's opaque subject, not the display name, as identity.
 [Structured authentication](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#authentication-configuration-from-a-file)

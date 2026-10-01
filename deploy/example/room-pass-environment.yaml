@@ -1,0 +1,24 @@
+# The three settings deploy/base leaves to the environment. Room Pass refuses to
+# start without them. env merges by name, so the base's other variables stay.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: room-pass
+spec:
+  template:
+    spec:
+      containers:
+        - name: room-pass
+          # Pin the release you tested, by digest.
+          image: ghcr.io/sunib/room-pass:2.0.0
+          env:
+            # The application's origin: where /join is served.
+            - name: JOIN_ORIGIN
+              value: https://app.example.com
+            # Dex's issuer: exactly the `issuer` in dex-config.yaml.
+            - name: ISSUER_ORIGIN
+              value: https://login.example.com
+            # Where a participant may be sent after login, comma-separated. A
+            # Room can narrow this list but never widen it.
+            - name: ALLOWED_RETURN_URLS
+              value: https://app.example.com/

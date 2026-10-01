@@ -1,0 +1,36 @@
+# Dex's configuration: https://dexidp.io/docs/configuration/
+issuer: https://login.example.com
+storage:
+  type: sqlite3
+  config:
+    file: /var/dex/dex.db
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  # The participant already chose to join on the Room Pass page; a second
+  # "grant access" screen only adds a tap.
+  skipApprovalScreen: true
+staticClients:
+  # The application participants sign in to. A confidential client: its
+  # backend exchanges the code and keeps the tokens. It must request the
+  # openid, profile, email, groups and federated:id scopes; the apiserver
+  # rejects a token without federated_claims.
+  - id: my-app
+    name: My application
+    redirectURIs:
+      - https://app.example.com/auth/callback
+    secretEnv: MY_APP_CLIENT_SECRET
+connectors:
+  # The only connector Room Pass works with. Its id is part of the identity
+  # contract: it sets the callback path (/callback/room-pass), Room Pass's
+  # CONNECTOR_ID default, and the connector the apiserver configuration
+  # contains. The header names are the ones Room Pass sends.
+  - type: authproxy
+    id: room-pass
+    name: Join the room
+    config:
+      userIDHeader: X-Remote-User-Id
+      userHeader: X-Remote-User
+      userNameHeader: X-Remote-User-Name
+      emailHeader: X-Remote-User-Email
+      groupHeader: X-Remote-Group
