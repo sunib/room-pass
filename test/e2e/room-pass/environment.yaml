@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: room-pass
+  namespace: room-pass
+spec:
+  template:
+    spec:
+      containers:
+        - name: room-pass
+          env:
+            - name: JOIN_ORIGIN
+              value: https://demo.room-pass.test:18443
+            - name: ISSUER_ORIGIN
+              value: https://login.room-pass.test:18443
+            # The minimal demo client. A consumer application adds its own entry.
+            - name: ALLOWED_RETURN_URLS
+              value: https://demo.room-pass.test:18443/app/

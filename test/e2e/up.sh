@@ -48,8 +48,11 @@ if [ -f /.dockerenv ]; then
 fi
 export KUBECONFIG="$PWD/.local/kubeconfig"
 kubectl wait --for=condition=Ready node/k3d-room-pass-e2e-server-0 --timeout=90s
-kubectl apply -f config/crd
-kubectl apply -k deploy/base
+kubectl apply -k config/crd
+# A Room applied in the same breath as its new CRD can fail with "no matches for
+# kind": the apiserver serves the type only once the CRD is Established.
+kubectl wait --for=condition=Established --timeout=60s crd/rooms.room-pass.koudijs.dev crd/participants.room-pass.koudijs.dev
+kubectl apply -k test/e2e/room-pass
 if ! kubectl -n room-pass get secret room-pass-cookie >/dev/null 2>&1; then
   openssl rand 32 > .local/hash-key
   openssl rand 32 > .local/block-key

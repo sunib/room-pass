@@ -58,9 +58,9 @@ writer; that needs a design, not a replica count.
 
 ## Generated files
 
-`config/crd/` and `api/v1alpha1/zz_generated.deepcopy.go` come from
-`task generate`. Never edit them by hand; CI's `task verify-generate` fails
-when they are stale.
+`config/crd/` (the CRDs in `bases/` and the `kustomization.yaml` that lists
+them) and `api/v1alpha1/zz_generated.deepcopy.go` come from `task generate`.
+Never edit them by hand; CI's `task verify-generate` fails when they are stale.
 
 ## Tool versions
 

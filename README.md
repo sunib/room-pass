@@ -118,15 +118,24 @@ provide a work identity provider. Those remain platform integration work.
 
 ## Kubernetes API and deployment
 
-```sh
-# Choose a destination kubeconfig explicitly before deployment.
-kubectl apply -f room-pass/config/crd/
-kubectl apply -k room-pass/deploy/base/
+Both `config/crd` and `deploy/base` are kustomize bases (`config/crd` from the first
+release after 2.0.0), so an overlay can name them remotely at a release tag:
+
+```yaml
+# kustomization.yaml in your environment
+resources:
+  - https://github.com/sunib/room-pass//config/crd?ref=vX.Y.Z
+  - https://github.com/sunib/room-pass//deploy/base?ref=vX.Y.Z
+patches:
+  - path: room-pass-environment.yaml
 ```
 
-The base intentionally contains local example hostnames/image tags. Supply your image
-digest, `JOIN_ORIGIN`, `ISSUER_ORIGIN`, `DEX_UPSTREAM`, `ROOM_NAME`, and
-`ALLOWED_RETURN_URLS` through an environment overlay. Apply a Room with a future end
+The base carries no hostnames. `JOIN_ORIGIN`, `ISSUER_ORIGIN` and `ALLOWED_RETURN_URLS`
+are required, and Room Pass refuses to start without them; add them with a
+strategic-merge patch on the `room-pass` container's `env`, which merges by name, so a
+variable added to the base later still arrives. Override `DEX_UPSTREAM`, `ROOM_NAME` and
+the image the same way. [test/e2e/room-pass](test/e2e/room-pass) is a working overlay.
+Apply the CRDs and wait for them to be Established before the first Room. Apply a Room with a future end
 time, a demo-prefixed group, and exact HTTPS return URLs included in that platform
 allowlist. `test/e2e/up.sh` contains a runnable Room example. Required cookie Secret:
 
