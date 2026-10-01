@@ -98,3 +98,23 @@ kubectl apply -f test/e2e/demo-client.yaml
 kubectl -n room-pass patch deployment demo-client --type=merge -p "{\"spec\":{\"template\":{\"spec\":{\"hostAliases\":[{\"ip\":\"$gateway\",\"hostnames\":[\"login.room-pass.test\"]}]}}}}"
 kubectl -n room-pass rollout restart deployment/demo-client
 kubectl -n room-pass rollout status deployment/demo-client --timeout=120s
+
+# Ready, from where the browser stands. A finished rollout says the pods are up;
+# it does not say Traefik routes to them yet, and a browser test that starts in
+# that gap gets 502 Bad Gateway on its first page. So make the tests' first
+# request, through Traefik and the demo client to the join page, until the
+# answer comes from the application rather than the proxy: anything but 5xx.
+# Not "until 200": without a browser's cookies the join flow refuses with 403,
+# which is the application answering and exactly what this waits for.
+for attempt in $(seq 1 60); do
+  status=$(curl -sk -L -o /dev/null -w '%{http_code}' \
+    --resolve "demo.room-pass.test:18443:$gateway" \
+    --resolve "login.room-pass.test:18443:$gateway" \
+    https://demo.room-pass.test:18443/app/login || true)
+  case "$status" in
+    000|5??) sleep 2 ;;
+    *) echo "Fixture answers through Traefik (HTTP ${status}) after ${attempt} attempt(s)."; exit 0 ;;
+  esac
+done
+echo "ERROR: https://demo.room-pass.test:18443/app/login still answers ${status} after 120s." >&2
+exit 1
