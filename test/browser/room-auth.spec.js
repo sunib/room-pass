@@ -120,7 +120,12 @@ test("invalid room code does not enroll and is corrected in place", async ({
 
 test("a tampered form CSRF token does not enroll", async ({ page }) => {
   await page.goto("/app/login");
-  await page.getByLabel("Room code").fill(room().status.joinCode.code);
+  // Read once. The code rotates, and the page is expected to give back what was
+  // TYPED -- comparing it with a second read fails whenever a rotation lands in
+  // between, which is a test bug, not a server one. The typed code stays
+  // acceptable for the second press because the Room keeps recent codes valid.
+  const code = room().status.joinCode.code;
+  await page.getByLabel("Room code").fill(code);
   await page.getByLabel("Display name").fill(testName);
   await page
     .locator('input[name="csrf"]')
@@ -143,9 +148,7 @@ test("a tampered form CSRF token does not enroll", async ({ page }) => {
   // to retype a room code they can no longer see -- is the wrong answer to much
   // the commoner cause. The page comes back with a fresh token and everything
   // they typed, so one more press finishes the join.
-  await expect(page.getByLabel("Room code")).toHaveValue(
-    room().status.joinCode.code,
-  );
+  await expect(page.getByLabel("Room code")).toHaveValue(code);
   await expect(page.getByLabel("Display name")).toHaveValue(testName);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(
