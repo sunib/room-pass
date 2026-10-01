@@ -22,6 +22,22 @@ tasks:
     cmds:
       - task --list
 
+  ci:
+    desc: Everything CI checks, in the order it checks it
+    # .github/workflows/ci.yml builds the ci stage of .devcontainer/Dockerfile and
+    # runs exactly this inside it. A red CI run reproduces with `task ci` in the
+    # devcontainer. It creates two disposable k3d clusters on the Docker daemon
+    # it can reach, one after the other, and deletes both.
+    cmds:
+      - task: lint
+      - task: test
+      - task: verify-generate
+      - task: integration
+      - task: test-network
+      - defer: { task: e2e-down }
+      - task: e2e-up
+      - task: browser
+
   deps:
     desc: Download Go module dependencies
     sources:
@@ -87,10 +103,13 @@ tasks:
 
   integration:
     desc: Test CRDs against a real local API server and etcd
-    # Needs envtest binaries. setup-envtest downloads them on first use, so this is
-    # not part of `task test` and CI runs it as its own step.
+    # Needs an API server and etcd binary. The CI image ships them at
+    # ENVTEST_K8S_VERSION and points KUBEBUILDER_ASSETS at them; anywhere else,
+    # setup-envtest fetches that same version on first use.
+    vars:
+      ENVTEST_K8S_VERSION: '{{.ENVTEST_K8S_VERSION | default "1.31.0"}}'
     cmds:
-      - KUBEBUILDER_ASSETS="$(setup-envtest use 1.31.x -p path)" go test -count=1 ./test/integration
+      - KUBEBUILDER_ASSETS="${KUBEBUILDER_ASSETS:-$(setup-envtest use {{.ENVTEST_K8S_VERSION}} -p path)}" go test -count=1 ./test/integration
 
   build:
     desc: Build the room-pass binary into bin/
@@ -203,7 +222,10 @@ tasks:
   browser:
     desc: Run Chromium room-login tests against the local e2e fixture
     dir: test/browser
+    # The CI image ships Chromium for the Playwright version package-lock.json
+    # resolves and sets PLAYWRIGHT_BROWSERS_PATH. Outside it, Playwright installs
+    # the browser and its system libraries first (which may use sudo).
     cmds:
-      - npm ci
-      - npx playwright install --with-deps chromium
+      - npm ci --no-audit --no-fund
+      - '[ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ] || npx playwright install --with-deps chromium'
       - npm test
