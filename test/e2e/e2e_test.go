@@ -50,6 +50,11 @@ const join = "https://demo.room-pass.test:18443"
 // come back as the same participant to prove identity survives a restart.
 var participantName = "Ada Demo " + runID()
 
+// storedName is participantName as Room Pass stores and issues it: labelName
+// folds the spaces to hyphens, so that is the name in the token, the audit
+// extras and the demo client's greeting.
+var storedName = strings.ReplaceAll(participantName, " ", "-")
+
 func runID() string {
 	b := make([]byte, 4)
 	if _, e := rand.Read(b); e != nil {
@@ -130,7 +135,7 @@ func (f *flow) login(enroll bool) (string, map[string]any) {
 	if e = verified.Claims(&claims); e != nil {
 		f.t.Fatal(e)
 	}
-	if claims["name"] != participantName || !strings.HasSuffix(fmt.Sprint(claims["email"]), "@koudijs.dev.test") || fmt.Sprint(claims["groups"]) != "[demo:room-pass-test]" {
+	if claims["name"] != storedName || !strings.HasSuffix(fmt.Sprint(claims["email"]), "@koudijs.dev.test") || fmt.Sprint(claims["groups"]) != "[demo:room-pass-test]" {
 		f.t.Fatalf("wrong identity claims: %v", claims)
 	}
 	// The whole shared-issuer containment argument rests on this claim: the
@@ -320,7 +325,7 @@ func TestRealDexAndKubernetes(t *testing.T) {
 				continue
 			}
 			if event.Stage == "ResponseComplete" && event.Verb == "create" && event.ResponseObject.Metadata.Name == cm.Name {
-				auditOK = event.User.Username == "demo:"+fmt.Sprint(first["sub"]) && fmt.Sprint(event.User.Extra["configbutler.ai/claims/display-name"]) == "["+participantName+"]" && fmt.Sprint(event.User.Extra["configbutler.ai/claims/email"]) == "["+fmt.Sprint(first["email"])+"]"
+				auditOK = event.User.Username == "demo:"+fmt.Sprint(first["sub"]) && fmt.Sprint(event.User.Extra["configbutler.ai/claims/display-name"]) == "["+storedName+"]" && fmt.Sprint(event.User.Extra["configbutler.ai/claims/email"]) == "["+fmt.Sprint(first["email"])+"]"
 			}
 		}
 		if auditOK {
@@ -384,7 +389,7 @@ func TestRealDexAndKubernetes(t *testing.T) {
 	}
 	b, _ = io.ReadAll(r.Body)
 	r.Body.Close()
-	if r.StatusCode != 200 || !strings.Contains(string(b), "Welcome, "+participantName) {
+	if r.StatusCode != 200 || !strings.Contains(string(b), "Welcome, "+storedName) {
 		t.Fatalf("interactive callback: %d %s", r.StatusCode, b)
 	}
 	form = url.Values{}

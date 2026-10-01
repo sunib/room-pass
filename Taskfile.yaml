@@ -37,6 +37,8 @@ tasks:
       - defer: { task: e2e-down }
       - task: e2e-up
       - task: browser
+      # After browser: it restarts Room Pass and changes RBAC, then restores it.
+      - task: e2e
 
   deps:
     desc: Download Go module dependencies
