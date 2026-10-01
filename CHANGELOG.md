@@ -1,16 +1,16 @@
 # Changelog
 
-## [2.0.0](https://github.com/sunib/room-pass/compare/v1.1.0...v2.0.0) (2026-10-01)
+## [2.0.0](https://github.com/sunib/room-pass/tree/v2.0.0) (2026-10-01)
 
+The first release from this repository. Room Pass 1.x was released from [Voter](https://github.com/sunib/voter/releases/tag/v1.1.0).
 
 ### ⚠ BREAKING CHANGES
 
-* the Room and Participant CRDs are rooms.room-pass.koudijs.dev and participants.room-pass.koudijs.dev. This replaces roompass.koudijs.dev from earlier in this release; coming from Room Pass 1.x, the group changes from roompass.configbutler.ai to room-pass.koudijs.dev.
-* the Room and Participant CRDs are now rooms.roompass.koudijs.dev and participants.roompass.koudijs.dev. Existing roompass.configbutler.ai objects are not read by this version. Install the new CRDs, recreate the Room under the new group, and update RBAC rules that name the old group. Participants re-enroll; their identity is derived from the display name, so a returning participant who enters the same name gets the same subject. The cookie-key Secret, connector ID and subject format are unchanged.
+* the Room and Participant CRDs are rooms.room-pass.koudijs.dev and participants.room-pass.koudijs.dev; in 1.x they were in roompass.configbutler.ai. Existing roompass.configbutler.ai objects are not read by this version. Install the new CRDs, recreate the Room under the new group, and update RBAC rules that name the old group. Participants re-enroll; their identity is derived from the display name, so a returning participant who enters the same name gets the same subject. The cookie-key Secret, connector ID and subject format are unchanged.
 
 ### Features
 
-* move to github.com/sunib/room-pass and the roompass.koudijs.dev API group ([ab02e42](https://github.com/sunib/room-pass/commit/ab02e42d4db963a88e7947a5d0c8818e2b07f367))
+* move to github.com/sunib/room-pass, with its own Go module (was github.com/sunib/voter/room-pass) ([ab02e42](https://github.com/sunib/room-pass/commit/ab02e42d4db963a88e7947a5d0c8818e2b07f367))
 * the API group is room-pass.koudijs.dev, and the fixture hosts are *.room-pass.test ([#10](https://github.com/sunib/room-pass/issues/10)) ([28d18b1](https://github.com/sunib/room-pass/commit/28d18b190d8af3165f55819272d18edba4901842))
 
 
