@@ -61,13 +61,13 @@ What remained after the extraction commits:
 |---|---|
 | Synthetic email suffix is hardcoded in Go and browser preview | Choose neutral product behavior and keep the preview consistent |
 | Display names become normalized, unique participant identifiers | Decide and document collision, international-name, and cross-room behavior |
-| Deployment base omits the complete Dex/routing/TLS setup | Promote a complete example rather than presenting the base as a turnkey install |
-| QR prefill requires the application login endpoint on the join host | Document this requirement; remote hosting needs a separate design |
+| ~~Deployment base omits the complete Dex/routing/TLS setup~~ | Done: `deploy/` holds Room Pass, Dex, edge and apiserver components and a complete `deploy/example`, which the fixture deploys in CI; [docs/install.md](docs/install.md) walks through it |
+| QR prefill requires the application login endpoint on the join host | Documented in [docs/install.md](docs/install.md) and [docs/qr-join.md](docs/qr-join.md); remote hosting needs a separate design |
 
 Documentation also needs reconciliation with code: the README describes random
 participant names and uncertain-create recovery, while enrollment now creates
-name-derived records and returns an error on an uncertain create. The README's
-Dex connector ID differs from the fixture. Treat current source and verified
+name-derived records and returns an error on an uncertain create. (The README's
+Dex connector ID now matches the fixture: `room-pass`.) Treat current source and verified
 behavior as the basis for rewriting the contract.
 
 ## Phase 1: settle the public contract
@@ -124,7 +124,11 @@ Provide two documented paths:
   setup explicitly, including what is needed to reach it from a real phone.
 - **Run an event:** configure public hostnames, TLS, persistent Dex storage,
   cookie keys, client/return URLs, room settings, permissions, and enforced Dex
-  network isolation through one worked deployment example.
+  network isolation through one worked deployment example. *Done:*
+  [docs/install.md](docs/install.md) and [deploy/example](deploy/example), with
+  the settings that must agree, a sample Room, its immutable fields, and the
+  event runbook. Still open below: the presenter CLI without a Go checkout, and
+  verification by a speaker who was not involved.
 
 Document the exact settings users must supply rather than asking them to copy
 values from a test script. Supply a sample Room resource and a rehearsal-friendly
