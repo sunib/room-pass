@@ -83,13 +83,6 @@ func TestDexNetworkBoundary(t *testing.T) {
 			continue
 		}
 		switch meta.Kind {
-		case "PersistentVolumeClaim":
-			pvc := &corev1.PersistentVolumeClaim{}
-			if err := yaml.Unmarshal(obj.Raw, pvc); err != nil {
-				t.Fatal(err)
-			}
-			pvc.Namespace = "dex"
-			create(pvc)
 		case "ConfigMap":
 			cm := &corev1.ConfigMap{}
 			if err := yaml.Unmarshal(obj.Raw, cm); err != nil {

@@ -104,7 +104,7 @@ kubectl apply -f test/e2e/demo-rbac.yaml
 kubectl -n room-pass rollout restart deployment/room-pass
 kubectl -n room-pass rollout status deployment/room-pass --timeout=180s
 # Dex is not restarted: its config is a generated ConfigMap, so a change to it
-# rolls Dex by itself, and its SQLite store keeps signing keys across restarts.
+# rolls Dex by itself, and a needless restart would only rotate its keys.
 kubectl -n room-pass rollout status deployment/dex --timeout=180s
 printf 'Cluster ready. Kubeconfig: %s/.local/kubeconfig\n' "$PWD"
 

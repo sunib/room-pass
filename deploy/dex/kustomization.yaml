@@ -9,5 +9,4 @@ namespace: room-pass
 resources:
   - deployment.yaml
   - service.yaml
-  - storage.yaml
   - networkpolicy.yaml
