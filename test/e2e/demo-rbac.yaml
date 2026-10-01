@@ -1,0 +1,35 @@
+# What the demo client's participants may do: write ConfigMaps in demo, as the
+# Room's audience group. The work namespace is what they must NOT reach.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: work
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: demo-editor
+  namespace: demo
+rules:
+  - apiGroups: ['']
+    resources: [configmaps]
+    verbs: [create, get, update, patch, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: demo-editor
+  namespace: demo
+subjects:
+  - kind: Group
+    name: demo:room-pass-test
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: demo-editor
+  apiGroup: rbac.authorization.k8s.io

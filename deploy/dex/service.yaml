@@ -1,0 +1,14 @@
+# Cluster-internal only. Nothing exposes this Service: browsers, applications
+# and the kube-apiserver all reach Dex through the issuer host, where Room Pass
+# answers and forwards only Dex's protocol endpoints.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+spec:
+  selector:
+    app: dex
+  ports:
+    - name: http
+      port: 5556
+      targetPort: http

@@ -1,0 +1,12 @@
+# Traefik middlewares for Room Pass's routes. An Ingress opts in with:
+#
+#   traefik.ingress.kubernetes.io/router.middlewares: >-
+#     room-pass-room-pass-strip-identity-headers@kubernetescrd,room-pass-room-pass-edge-limit@kubernetescrd
+#
+# (<namespace>-<name>@kubernetescrd: change the prefix with the namespace.)
+# With another ingress controller, configure the same two things there.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: room-pass
+resources:
+  - middlewares.yaml

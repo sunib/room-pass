@@ -1,0 +1,29 @@
+# One event. Apply after the CRDs are Established; Room Pass serves the Room
+# named by ROOM_NAME (deploy/base: demo) in its own namespace.
+#
+# Decide joinCode, audienceGroup and allowedReturnURLs before the event: they
+# cannot be changed afterwards. Changing them means deleting and recreating the
+# Room, which deletes its Participants and signs every browser out.
+apiVersion: room-pass.koudijs.dev/v1alpha1
+kind: Room
+metadata:
+  name: demo
+  namespace: room-pass
+spec:
+  title: My talk
+  # Shown on the join page: what the application does with the name.
+  attributionNote: Your name labels the changes you make during the session.
+  # Nobody can join after this. Move it before every event.
+  endsAt: "2026-12-31T18:00:00Z"
+  enrollment: Open
+  maxParticipants: 300
+  # Every participant's group. Bind your application's permissions to it.
+  audienceGroup: demo:my-talk
+  # Must also appear in ALLOWED_RETURN_URLS.
+  allowedReturnURLs:
+    - https://app.example.com/
+  # validFor may be at most four rotations.
+  joinCode:
+    rotateEvery: 30s
+    validFor: 120s
+    length: 6

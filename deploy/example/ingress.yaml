@@ -1,0 +1,52 @@
+# Room Pass's routes. Your application's own Ingress serves the rest of
+# app.example.com; nothing else may serve login.example.com, and nothing may
+# expose the dex Service directly.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: room-pass
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      room-pass-room-pass-strip-identity-headers@kubernetescrd,room-pass-room-pass-edge-limit@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    # A certificate for both hosts, for example from cert-manager.
+    - secretName: room-pass-tls
+      hosts: [app.example.com, login.example.com]
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /bind
+            pathType: Exact
+            backend:
+              service:
+                name: room-pass
+                port:
+                  name: http
+          - path: /join
+            pathType: Exact
+            backend:
+              service:
+                name: room-pass
+                port:
+                  name: http
+          - path: /logout
+            pathType: Exact
+            backend:
+              service:
+                name: room-pass
+                port:
+                  name: http
+    - host: login.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: room-pass
+                port:
+                  name: http

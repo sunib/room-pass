@@ -1,0 +1,31 @@
+# A complete Room Pass installation for one event, with placeholder hosts:
+#
+#   app.example.com     your application; Room Pass answers /bind, /join and
+#                       /logout on it (the join page has to be on the app's host
+#                       for its cookies and the QR code to work)
+#   login.example.com   the issuer; Room Pass answers ALL of it and forwards only
+#                       Dex's protocol endpoints to Dex
+#
+# Copy this directory, replace the hosts and the client, and build it. In your
+# own repository, point the resources at a release instead:
+#
+#   - https://github.com/sunib/room-pass//deploy/base?ref=vX.Y.Z
+#
+# docs/install.md walks through every file here. The CRDs (config/crd) and the
+# Room (room.yaml) are applied separately, CRDs first: a Room in the same apply
+# as its CRD fails with "no matches for kind".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: room-pass
+resources:
+  - ../base
+  - ../dex
+  - ../edge/traefik
+  - ingress.yaml
+patches:
+  - path: room-pass-environment.yaml
+  - path: dex-client-secret.yaml
+configMapGenerator:
+  - name: dex
+    files:
+      - config.yaml=dex-config.yaml

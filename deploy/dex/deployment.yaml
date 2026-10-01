@@ -1,0 +1,74 @@
+# One replica on a SQLite file. Dex keeps its signing keys, refresh tokens and
+# pending authorization requests in storage; the in-memory store loses all three
+# on every restart, which signs out every application session mid-event.
+#
+# Recreate, because the volume is ReadWriteOnce: a rolling update would start
+# the new pod before releasing the old one's claim, and on a multi-node cluster
+# it can wait forever for a volume that is still attached elsewhere.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: dex
+  template:
+    metadata:
+      labels:
+        app: dex
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # The dex user in ghcr.io/dexidp/dex.
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dex
+          image: ghcr.io/dexidp/dex:v2.45.1
+          args: [dex, serve, /etc/dex/config.yaml]
+          ports:
+            - name: http
+              containerPort: 5556
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex
+              readOnly: true
+            - name: data
+              mountPath: /var/dex
+            # The image's entrypoint renders the config into /tmp before
+            # starting Dex; the root filesystem stays read-only.
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /.well-known/openid-configuration
+              port: http
+      volumes:
+        - name: config
+          configMap:
+            name: dex
+        - name: data
+          persistentVolumeClaim:
+            claimName: dex
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi

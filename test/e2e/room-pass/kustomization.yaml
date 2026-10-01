@@ -1,8 +1,18 @@
-# The fixture's Room Pass: deploy/base plus the values that belong to this
-# environment. A consumer's overlay has the same shape, with its own hosts.
+# The fixture's installation: the same components as deploy/example, with this
+# environment's hosts, client and certificate. CI deploys exactly this, so the
+# components the install guide describes are the ones the browser and e2e
+# suites run against.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+namespace: room-pass
 resources:
   - ../../../deploy/base
+  - ../../../deploy/dex
+  - ../../../deploy/edge/traefik
+  - ingress.yaml
 patches:
   - path: environment.yaml
+configMapGenerator:
+  - name: dex
+    files:
+      - config.yaml=dex-config.yaml

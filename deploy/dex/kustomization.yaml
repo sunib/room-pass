@@ -1,0 +1,13 @@
+# Dex as Room Pass's dedicated issuer. The configuration is the environment's:
+# this base deliberately has no ConfigMap, and an overlay generates one named
+# `dex` with a config.yaml key (see deploy/example). Generating it, rather than
+# applying a fixed ConfigMap, gives it a content hash, so a changed config rolls
+# Dex instead of waiting for someone to restart it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: room-pass
+resources:
+  - deployment.yaml
+  - service.yaml
+  - storage.yaml
+  - networkpolicy.yaml
