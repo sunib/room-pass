@@ -194,6 +194,18 @@ test("closing enrollment removes the browser join form", async ({ page }) => {
       "-p",
       JSON.stringify({ spec: { enrollment } }),
     );
+    // Closing cleared status.joinCode, and the controller issues a new one only
+    // after it sees the reopen. The next test reads that code straight away, so
+    // the room is not handed back until the controller has caught up.
+    await expect
+      .poll(() => {
+        const r = room();
+        return (
+          r.status.observedGeneration === r.metadata.generation &&
+          (enrollment !== "Open" || Boolean(r.status.joinCode?.code))
+        );
+      })
+      .toBe(true);
   }
 });
 
