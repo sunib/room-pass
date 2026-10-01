@@ -100,21 +100,37 @@ kubectl -n room-pass rollout restart deployment/demo-client
 kubectl -n room-pass rollout status deployment/demo-client --timeout=120s
 
 # Ready, from where the browser stands. A finished rollout says the pods are up;
-# it does not say Traefik routes to them yet, and a browser test that starts in
-# that gap gets 502 Bad Gateway on its first page. So make the tests' first
-# request, through Traefik and the demo client to the join page, until the
-# answer comes from the application rather than the proxy: anything but 5xx.
-# Not "until 200": without a browser's cookies the join flow refuses with 403,
-# which is the application answering and exactly what this waits for.
-for attempt in $(seq 1 60); do
-  status=$(curl -sk -L -o /dev/null -w '%{http_code}' \
+# it does not say Traefik routes to them. In that gap Traefik answers for itself
+# -- 404 before it has loaded a route, 502 while an endpoint still points at a
+# pod that `rollout restart` is terminating -- and a browser test that starts
+# there fails on its first page. Neither status says the application is up, so
+# wait for what the browser gets: the whole redirect chain, with cookies, ending
+# on the join page with its "Room code" field. Three times running, so one lucky
+# answer from a pod on its way out does not count.
+probe() {
+  local jar body
+  jar=$(mktemp); body=$(mktemp)
+  status=$(curl -sk -L -c "$jar" -b "$jar" -o "$body" -w '%{http_code}' \
     --resolve "demo.room-pass.test:18443:$gateway" \
     --resolve "login.room-pass.test:18443:$gateway" \
     https://demo.room-pass.test:18443/app/login || true)
-  case "$status" in
-    000|5??) sleep 2 ;;
-    *) echo "Fixture answers through Traefik (HTTP ${status}) after ${attempt} attempt(s)."; exit 0 ;;
-  esac
+  local ok=1
+  if [ "$status" = 200 ] && grep -q 'Room code' "$body"; then ok=0; fi
+  rm -f "$jar" "$body"
+  return "$ok"
+}
+streak=0
+for attempt in $(seq 1 90); do
+  if probe; then
+    streak=$((streak + 1))
+    if [ "$streak" -ge 3 ]; then
+      echo "Fixture serves the join page through Traefik (attempt ${attempt})."
+      exit 0
+    fi
+  else
+    streak=0
+  fi
+  sleep 2
 done
-echo "ERROR: https://demo.room-pass.test:18443/app/login still answers ${status} after 120s." >&2
+echo "ERROR: the join page was not served three times running within 180s (last answer: HTTP ${status})." >&2
 exit 1
