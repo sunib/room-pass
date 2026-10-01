@@ -64,9 +64,9 @@ tasks:
       - golangci-lint run ./...
 
   lint-dockerfiles:
-    desc: Lint both Dockerfiles with hadolint (config in .hadolint.yaml)
+    desc: Lint every Dockerfile with hadolint (config in .hadolint.yaml)
     cmds:
-      - hadolint .devcontainer/Dockerfile Dockerfile
+      - hadolint .devcontainer/Dockerfile Dockerfile test/e2e/demo-client/Dockerfile
 
   lint-actions:
     desc: Lint the GitHub Actions workflows with actionlint

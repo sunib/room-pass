@@ -1,7 +1,7 @@
 # hadolint configuration - https://github.com/hadolint/hadolint#configure
 #
-# Covers both Dockerfiles: .devcontainer/Dockerfile (tooling) and ./Dockerfile
-# (the Room Pass image). `task lint-dockerfiles` runs it; CI runs the same task.
+# Covers every Dockerfile: .devcontainer/Dockerfile (tooling), ./Dockerfile (the
+# Room Pass image) and test/e2e/demo-client/Dockerfile (the fixture's OIDC client). `task lint-dockerfiles` runs it; CI runs the same task.
 ignored:
   # Distro package versions are intentionally unpinned in the tooling image; the
   # tools that matter are pinned by version in .devcontainer/Dockerfile's ENV block.

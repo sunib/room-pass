@@ -39,5 +39,6 @@ updates:
     directories:
       - "/"
       - "/.devcontainer"
+      - "/test/e2e/demo-client"
     patterns: ["*"]
     multi-ecosystem-group: "dependencies"
