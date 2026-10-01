@@ -172,6 +172,21 @@ task generate
 CEL and OpenAPI validate bounds, enums, immutability and irreversible transitions at the
 API server. `allowedReturnURLs` is a set and conditions are a map keyed by type.
 
+## Upgrading from 1.x
+
+2.0.0 moved the API group from `roompass.configbutler.ai` to `room-pass.koudijs.dev`;
+the [CHANGELOG](CHANGELOG.md) lists the steps. Two things it does not say:
+
+- **Both groups can stay installed.** 2.x ignores the old objects, so you may keep the
+  1.x Room and Participants as a record. While both CRDs exist, `kubectl get room`
+  silently picks one of the two kinds named `Room`; use the full name,
+  `kubectl get rooms.room-pass.koudijs.dev` (or `rooms.roompass.configbutler.ai` for the
+  old records).
+- **Removing the old CRDs discards the old records.** Deleting
+  `rooms.roompass.configbutler.ai` and `participants.roompass.configbutler.ai` deletes
+  every object of those kinds with them. Under a GitOps tool that prunes, dropping the
+  old CRDs from Git does the same. Export what you want to keep first.
+
 ## Dex and routing trust boundary
 
 See [the handoff protocol](docs/handoff.md). **All public issuer traffic must go through
