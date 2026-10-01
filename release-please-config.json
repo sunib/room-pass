@@ -1,11 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "88ab5863e1b6b44d6cc16a1ca47cd4958efb128e",
   "packages": {
     ".": {
       "release-type": "simple",
       "package-name": "room-pass",
       "include-component-in-tag": false,
-      "last-release-sha": "88ab5863e1b6b44d6cc16a1ca47cd4958efb128e",
       "bump-minor-pre-major": false,
       "changelog-sections": [
         {
