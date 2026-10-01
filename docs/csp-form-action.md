@@ -47,9 +47,9 @@ share the join origin.
 Put the application on its own host and the browser reports:
 
 ```
-Sending form data to 'https://demo.roompass.test:18443/join' violates the
+Sending form data to 'https://demo.room-pass.test:18443/join' violates the
 following Content Security Policy directive:
-"form-action 'self' https://login.roompass.test:18443". The request has been blocked.
+"form-action 'self' https://login.room-pass.test:18443". The request has been blocked.
 ```
 
 Note what that message names: the POST to the **join** origin, which is

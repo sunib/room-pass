@@ -41,11 +41,11 @@ local. The fixture uses a Docker volume, so it also works with the devcontainer'
 sibling Docker daemon. On this host, the runtime inotify instance limit was raised
 from 128 to 1,024 to accommodate the additional cluster. Its TLS port is **18443** on the Docker host.
 
-For a browser, resolve `demo.roompass.test` and `login.roompass.test` to the Docker
+For a browser, resolve `demo.room-pass.test` and `login.room-pass.test` to the Docker
 host (or `127.0.0.1` with a local tunnel forwarding port 18443). Trust the generated
 `.local/tls.crt` in a dedicated test browser profile, then open:
 
-**https://demo.roompass.test:18443/app/**
+**https://demo.room-pass.test:18443/app/**
 
 Choose **Join the demo**, enter the projected code and a name, then press **Write a
 message to Kubernetes**. The tiny example OIDC client uses authorization code + PKCE,
@@ -67,7 +67,7 @@ kubectl -n demo get configmaps
 Or project a QR code instead, so nobody has to type anything but a name:
 
 ```sh
-task present BASE=https://demo.roompass.test:18443 NEXT=/answer/round-1
+task present BASE=https://demo.room-pass.test:18443 NEXT=/answer/round-1
 ```
 
 That follows the rotating code and redraws, under your own kubeconfig — a join code is

@@ -22,7 +22,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const origin = "https://demo.roompass.test:18443"
+const origin = "https://demo.room-pass.test:18443"
 
 type session struct{ Token, Name, State, Verifier string }
 
@@ -44,7 +44,7 @@ func main() {
 	ctx := oidc.ClientContext(context.Background(), protocol)
 	var provider *oidc.Provider
 	for {
-		provider, e = oidc.NewProvider(ctx, "https://login.roompass.test:18443")
+		provider, e = oidc.NewProvider(ctx, "https://login.room-pass.test:18443")
 		if e == nil {
 			break
 		}

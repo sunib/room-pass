@@ -35,8 +35,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const issuer = "https://login.roompass.test:18443"
-const join = "https://demo.roompass.test:18443"
+const issuer = "https://login.room-pass.test:18443"
+const join = "https://demo.room-pass.test:18443"
 
 // participantName carries a per-run id because the display name IS the
 // identity: Room Pass derives the Participant's object name from it, and a
@@ -175,7 +175,7 @@ func TestRealDexAndKubernetes(t *testing.T) {
 	}
 	tr := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}, DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, _, _ := net.SplitHostPort(addr)
-		if strings.HasSuffix(host, ".roompass.test") {
+		if strings.HasSuffix(host, ".room-pass.test") {
 			addr = net.JoinHostPort(gateway, "18443")
 		}
 		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)

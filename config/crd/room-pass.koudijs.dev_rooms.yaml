@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: rooms.roompass.koudijs.dev
+  name: rooms.room-pass.koudijs.dev
 spec:
-  group: roompass.koudijs.dev
+  group: room-pass.koudijs.dev
   names:
     kind: Room
     listKind: RoomList

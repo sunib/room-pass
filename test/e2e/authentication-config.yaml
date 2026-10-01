@@ -11,7 +11,7 @@ apiVersion: apiserver.config.k8s.io/v1beta1
 kind: AuthenticationConfiguration
 jwt:
   - issuer:
-      url: https://login.roompass.test:18443
+      url: https://login.room-pass.test:18443
       # Every fixture client that sends its token to Kubernetes. A token whose
       # aud is absent here is rejected outright -- correctly, but the symptom is
       # only "self subject review: Unauthorized" in the application's log while

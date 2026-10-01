@@ -20,13 +20,13 @@ export default defineConfig({
   expect: { timeout: 15000 },
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "https://demo.roompass.test:18443",
+    baseURL: "https://demo.room-pass.test:18443",
     ignoreHTTPSErrors: true,
     browserName: "chromium",
     viewport: { width: 390, height: 844 },
     launchOptions: {
       args: [
-        `--host-resolver-rules=MAP *.roompass.test ${gateway}`,
+        `--host-resolver-rules=MAP *.room-pass.test ${gateway}`,
         "--no-proxy-server",
       ],
     },

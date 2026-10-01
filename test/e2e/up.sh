@@ -5,7 +5,7 @@ mkdir -p .local
 chmod 700 .local
 # Dedicated cluster and kubeconfig; never switch the user's current context.
 if ! k3d cluster list -o json | python3 -c 'import json,sys;sys.exit(not any(c["name"]=="room-pass-e2e" for c in json.load(sys.stdin)))'; then
-  openssl req -x509 -newkey rsa:2048 -nodes -keyout .local/tls.key -out .local/tls.crt -days 7 -subj /CN=roompass-test -addext 'subjectAltName=DNS:demo.roompass.test,DNS:login.roompass.test,DNS:app.roompass.test' >/dev/null 2>&1
+  openssl req -x509 -newkey rsa:2048 -nodes -keyout .local/tls.key -out .local/tls.crt -days 7 -subj /CN=room-pass-test -addext 'subjectAltName=DNS:demo.room-pass.test,DNS:login.room-pass.test,DNS:app.room-pass.test' >/dev/null 2>&1
   # A Docker volume works with a sibling Docker daemon (host paths need not match).
   docker volume create room-pass-e2e-config >/dev/null
   docker run --rm -i -v room-pass-e2e-config:/config alpine:3.21 sh -c 'cat > /config/ca.crt' < .local/tls.crt
@@ -27,7 +27,7 @@ if ! k3d cluster list -o json | python3 -c 'import json,sys;sys.exit(not any(c["
   # --timeout bounds the --wait. Without it a server that never becomes ready
   # blocks until the CI job's own timeout kills it, which reports as "tests
   # were cancelled" rather than "the cluster did not come up".
-  k3d cluster create room-pass-e2e --image rancher/k3s:v1.31.5-k3s1 --servers 1 --agents 0 --wait --timeout 180s --network k3d-room-pass-e2e --host-alias "$gateway:login.roompass.test" --host-alias "$gateway:app.roompass.test" \
+  k3d cluster create room-pass-e2e --image rancher/k3s:v1.31.5-k3s1 --servers 1 --agents 0 --wait --timeout 180s --network k3d-room-pass-e2e --host-alias "$gateway:login.room-pass.test" --host-alias "$gateway:app.room-pass.test" \
     --kubeconfig-update-default=false --kubeconfig-switch-context=false \
     --port '18443:443@server:0' \
     --volume 'room-pass-e2e-config:/etc/room-pass@server:0' \
@@ -58,7 +58,7 @@ fi
 kubectl -n room-pass create secret tls local-tls --cert=.local/tls.crt --key=.local/tls.key --dry-run=client -o yaml | kubectl apply -f -
 ends_at=$(date -u -d '+4 hours' +%Y-%m-%dT%H:%M:%SZ)
 cat <<YAML | kubectl apply -f -
-apiVersion: roompass.koudijs.dev/v1alpha1
+apiVersion: room-pass.koudijs.dev/v1alpha1
 kind: Room
 metadata:
   name: demo
@@ -72,7 +72,7 @@ spec:
   enrollment: Open
   maxParticipants: 300
   audienceGroup: demo:room-pass-test
-  allowedReturnURLs: [https://demo.roompass.test:18443/app/]
+  allowedReturnURLs: [https://demo.room-pass.test:18443/app/]
 YAML
 docker build -t room-pass:dev .
 k3d image import room-pass:dev -c room-pass-e2e
@@ -95,6 +95,6 @@ kubectl -n room-pass create configmap issuer-ca --from-file=ca.crt=.local/tls.cr
 docker build -f test/e2e/demo-client/Dockerfile -t room-pass-demo-client:dev .
 k3d image import room-pass-demo-client:dev -c room-pass-e2e
 kubectl apply -f test/e2e/demo-client.yaml
-kubectl -n room-pass patch deployment demo-client --type=merge -p "{\"spec\":{\"template\":{\"spec\":{\"hostAliases\":[{\"ip\":\"$gateway\",\"hostnames\":[\"login.roompass.test\"]}]}}}}"
+kubectl -n room-pass patch deployment demo-client --type=merge -p "{\"spec\":{\"template\":{\"spec\":{\"hostAliases\":[{\"ip\":\"$gateway\",\"hostnames\":[\"login.room-pass.test\"]}]}}}}"
 kubectl -n room-pass rollout restart deployment/demo-client
 kubectl -n room-pass rollout status deployment/demo-client --timeout=120s

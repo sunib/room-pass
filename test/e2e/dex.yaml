@@ -5,7 +5,7 @@ metadata:
   namespace: room-pass
 data:
   config.yaml: |
-    issuer: https://login.roompass.test:18443
+    issuer: https://login.room-pass.test:18443
     storage:
       type: memory
     web:
@@ -19,7 +19,7 @@ data:
         name: Room Pass demo
         public: true
         redirectURIs:
-          - https://demo.roompass.test:18443/app/callback
+          - https://demo.room-pass.test:18443/app/callback
           - /device/callback
     connectors:
       - type: authproxy

@@ -68,9 +68,9 @@ spec:
   ingressClassName: traefik
   tls:
     - secretName: local-tls
-      hosts: [demo.roompass.test]
+      hosts: [demo.room-pass.test]
   rules:
-    - host: demo.roompass.test
+    - host: demo.room-pass.test
       http:
         paths:
           - path: /app
