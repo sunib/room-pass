@@ -61,11 +61,11 @@ not permission to create participant RBAC or impersonate users.
 
 ### Kubernetes API: `Room`
 
-API identity for implementation: `roompass.koudijs.dev/v1alpha1`, kind `Room`, plural `rooms`,
+API identity for implementation: `room-pass.koudijs.dev/v1alpha1`, kind `Room`, plural `rooms`,
 namespaced scope. This is the intended API contract, not an installed/generated CRD yet.
 
 ```yaml
-apiVersion: roompass.koudijs.dev/v1alpha1
+apiVersion: room-pass.koudijs.dev/v1alpha1
 kind: Room
 metadata:
   name: configbutler-demo
@@ -175,12 +175,12 @@ in flight can complete; stopping is not an instantaneous distributed barrier.
 
 ### Kubernetes API: `Participant`
 
-Use `roompass.koudijs.dev/v1alpha1`, kind `Participant`, plural `participants`,
+Use `room-pass.koudijs.dev/v1alpha1`, kind `Participant`, plural `participants`,
 namespaced in the same namespace as its Room. Create one per enrolled browser identity,
 not per request, token refresh, or OIDC transaction.
 
 ```yaml
-apiVersion: roompass.koudijs.dev/v1alpha1
+apiVersion: room-pass.koudijs.dev/v1alpha1
 kind: Participant
 metadata:
   name: p-<server-generated-random-id>

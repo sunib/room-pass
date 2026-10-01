@@ -7,7 +7,7 @@ Done in the first extraction commits:
 - History of `room-pass/` extracted from `github.com/sunib/voter` into
   `github.com/sunib/room-pass`, and audited for private fixture data first.
 - Go module is `github.com/sunib/room-pass`. The API group moved from
-  `roompass.configbutler.ai` to `roompass.koudijs.dev`, which is a breaking
+  `roompass.configbutler.ai` to `room-pass.koudijs.dev`, which is a breaking
   change and why the first release from here is 2.0.0.
 - Voter's consumer tests (voting, editor, operator, live stream, ballot load)
   and `voter.yaml` stayed in Voter; the fixture no longer builds `../voter`.
