@@ -175,7 +175,6 @@ jobs:
             dlv version
             gopls version
             kubectl version --client
-            helm version
             k3d version
             docker --version
             bash -ic 'complete -p task >/dev/null'
