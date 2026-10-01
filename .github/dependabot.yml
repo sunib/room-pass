@@ -1,33 +1,37 @@
 # Everything here is pinned: action SHAs, the golang base image digest, tool
 # versions in .devcontainer/Dockerfile's ENV block. Dependabot keeps them moving.
+#
+# One pull request a week for all of it. Every ecosystem below joins the same
+# multi-ecosystem group, so Go modules, the Playwright package, the workflow
+# actions and both base images arrive together and pass CI together -- a Go
+# module that needs a newer toolchain lands in the same PR as the image that
+# provides it, instead of failing on its own.
 version: 2
+
+multi-ecosystem-groups:
+  dependencies:
+    schedule:
+      interval: "weekly"
+
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "npm"
     directory: "/test/browser"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
 
   - package-ecosystem: "docker"
     directories:
       - "/"
       - "/.devcontainer"
-    schedule:
-      interval: "weekly"
+    patterns: ["*"]
+    multi-ecosystem-group: "dependencies"
