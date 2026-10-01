@@ -21,7 +21,7 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("set KUBEBUILDER_ASSETS or run task integration")
 	}
-	env := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd"}, ErrorIfCRDPathMissing: true}
+	env := &envtest.Environment{CRDDirectoryPaths: []string{"../../config/crd/bases"}, ErrorIfCRDPathMissing: true}
 	cfg, e := env.Start()
 	if e != nil {
 		t.Fatal(e)

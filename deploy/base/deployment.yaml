@@ -37,18 +37,15 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: JOIN_ORIGIN
-              value: https://demo.room-pass.test:18443
-            - name: ISSUER_ORIGIN
-              value: https://login.room-pass.test:18443
             - name: DEX_UPSTREAM
               value: http://dex:5556
-            - name: ALLOWED_RETURN_URLS
-              # The minimal demo client. A consumer application adds its own
-              # entry. A Room may only name a return URL that already appears here --
-              # Ready() refuses otherwise -- so this list is the platform half
-              # of that pair and cannot be widened from a Room.
-              value: https://demo.room-pass.test:18443/app/
+            # JOIN_ORIGIN, ISSUER_ORIGIN and ALLOWED_RETURN_URLS are required and
+            # belong to the environment, so the base sets none of them: an overlay
+            # adds all three with a strategic-merge patch (env merges by name), and
+            # Room Pass refuses to start while one is missing. ALLOWED_RETURN_URLS is
+            # the platform half of a pair: a Room may only name a return URL that
+            # already appears here -- Ready() refuses otherwise -- so it cannot be
+            # widened from a Room. test/e2e/room-pass is a working overlay.
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

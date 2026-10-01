@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -73,10 +74,11 @@ type Server struct {
 }
 
 func New(cfg Config, db client.Client) (*Server, error) {
-	for _, origin := range []string{cfg.JoinOrigin, cfg.IssuerOrigin} {
+	for _, o := range []struct{ name, origin string }{{"JOIN_ORIGIN", cfg.JoinOrigin}, {"ISSUER_ORIGIN", cfg.IssuerOrigin}} {
+		name, origin := o.name, o.origin
 		u, e := url.Parse(origin)
 		if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-			return nil, errors.New("origins must be exact HTTPS origins")
+			return nil, fmt.Errorf("%s must be an exact HTTPS origin, got %q", name, origin)
 		}
 	}
 	upstream, e := url.Parse(cfg.DexUpstream)
@@ -108,12 +110,12 @@ func New(cfg Config, db client.Client) (*Server, error) {
 		cfg.MaxHandoffs = 1000
 	}
 	if len(cfg.AllowedReturns) == 0 {
-		return nil, errors.New("return allowlist is empty")
+		return nil, errors.New("ALLOWED_RETURN_URLS is empty")
 	}
 	for _, raw := range cfg.AllowedReturns {
 		u, e := url.Parse(raw)
 		if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
-			return nil, errors.New("invalid return URL")
+			return nil, fmt.Errorf("ALLOWED_RETURN_URLS must list HTTPS URLs, got %q", raw)
 		}
 	}
 	s := &Server{cfg: cfg, formAction: formActionSources(cfg), db: db, cookies: securecookie.New(cfg.HashKey, cfg.BlockKey).MaxAge(int(cfg.CookieLifetime.Seconds())), proxy: httputil.NewSingleHostReverseProxy(upstream), transactions: map[string]*transaction{}, joins: rate.NewLimiter(cfg.JoinRate, cfg.JoinBurst), starts: rate.NewLimiter(cfg.HandoffRate, cfg.HandoffBurst), now: time.Now}

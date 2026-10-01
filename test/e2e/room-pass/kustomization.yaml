@@ -1,0 +1,8 @@
+# The fixture's Room Pass: deploy/base plus the values that belong to this
+# environment. A consumer's overlay has the same shape, with its own hosts.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../deploy/base
+patches:
+  - path: environment.yaml
