@@ -118,6 +118,9 @@ provide a work identity provider. Those remain platform integration work.
 
 ## Kubernetes API and deployment
 
+**To install Room Pass for an event, follow [docs/install.md](docs/install.md).** This
+section describes the pieces it uses.
+
 An installation is a few kustomize components, each usable as a remote base at a
 release tag (`https://github.com/sunib/room-pass//deploy/base?ref=vX.Y.Z`; `config/crd`
 and the components below from the first release after 2.0.0):
