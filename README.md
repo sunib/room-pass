@@ -4,7 +4,8 @@ Room-code sign-in for applications, powered by Dex.
 
 Room Pass started inside [Voter](https://github.com/sunib/voter), the live-voting
 demo it was built for, and was extracted with its history on 2026-09-30. Voter
-is now a consumer like any other. The [product vision](PRODUCT-VISION.md) and
+is now a consumer like any other; [docs/origin.md](docs/origin.md) tells that
+story and who Room Pass is for. The [product vision](PRODUCT-VISION.md) and
 [extraction plan](OPEN-SOURCE-PLAN.md) describe where it is going; the
 implementation and operating limits below are current.
 
