@@ -33,6 +33,11 @@ spec:
   #       group: demo:framework-react
   #     - label: Svelte
   #       group: demo:framework-svelte
+  # Optional: groups naming the browser and platform each participant joined
+  # with, such as demo:browser-safari and demo:platform-ios. Only what the
+  # browser claims to be.
+  # browserGroups:
+  #   prefix: "demo:"
   # Nobody can join after this. Move it before every event.
   endsAt: "2026-12-31T18:00:00Z"
   enrollment: Open

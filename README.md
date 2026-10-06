@@ -148,6 +148,9 @@ served from the application's own host
 With `spec.question` it asks one question at the door, and the `demo:` group of
 the answer joins `audienceGroup` in the participant's token
 ([install guide](docs/install.md#ask-one-question-at-the-door-optional)).
+`spec.browserGroups` adds groups naming the browser and platform a participant
+joined with, such as `demo:browser-safari`
+([install guide](docs/install.md#put-the-browser-in-the-groups-optional)).
 Required cookie Secret:
 
 ```sh

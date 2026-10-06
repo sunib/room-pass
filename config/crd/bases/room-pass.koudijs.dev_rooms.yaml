@@ -141,6 +141,25 @@ spec:
                 x-kubernetes-validations:
                 - message: audienceGroup is immutable
                   rule: self == oldSelf
+              browserGroups:
+                description: |-
+                  BrowserGroups adds two groups to everyone who joins, named after the
+                  browser and the platform they joined with, such as demo:browser-safari
+                  and demo:platform-ios. Empty, nothing is added.
+
+                  Like an answer, they are kept on the Participant (spec.groups) at
+                  enrollment and are only what the browser says it is.
+                properties:
+                  prefix:
+                    description: |-
+                      Prefix starts both names: demo: gives demo:browser-safari, and
+                      demo:my-talk: gives demo:my-talk:browser-safari.
+                    maxLength: 100
+                    pattern: ^demo:([a-zA-Z0-9][a-zA-Z0-9:_-]*)?$
+                    type: string
+                required:
+                - prefix
+                type: object
               endsAt:
                 description: EndsAt can be extended without changing participant identities.
                 format: date-time

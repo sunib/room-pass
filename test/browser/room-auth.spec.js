@@ -383,3 +383,44 @@ test("a Room's question adds the picked answer to the token's groups", async ({
     await roomSettled();
   }
 });
+
+// The browser groups, from a User-Agent this Chromium sends as an iPhone's. The
+// page says what will be shared before anyone presses Continue, and the token
+// Dex issues carries both names.
+test.describe("on an iPhone", () => {
+  test.use({
+    userAgent:
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+  });
+  test("a Room's browser groups name the browser in the token's groups", async ({
+    page,
+  }) => {
+    try {
+      patchRoom({ browserGroups: { prefix: "demo:" } });
+      await roomSettled();
+      await page.goto("/app/login");
+      await expect(
+        page.getByText("and your browser, Safari on iOS.", { exact: false }),
+      ).toBeVisible();
+      await page.getByLabel("Room code").fill(room().status.joinCode.code);
+      await page.getByLabel("Display name").fill(testName);
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await expect(
+        page.getByText(
+          "Your groups: demo:room-pass-test, demo:browser-safari, demo:platform-ios",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      const [p] = participants().filter(
+        (p) => p.spec.displayName === storedName,
+      );
+      expect(p.spec.groups).toEqual([
+        "demo:browser-safari",
+        "demo:platform-ios",
+      ]);
+    } finally {
+      patchRoom({ browserGroups: null });
+      await roomSettled();
+    }
+  });
+});

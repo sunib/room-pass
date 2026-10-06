@@ -77,6 +77,14 @@ type RoomSpec struct {
 	// event.
 	// +optional
 	Question *RoomQuestion `json:"question,omitempty"`
+	// BrowserGroups adds two groups to everyone who joins, named after the
+	// browser and the platform they joined with, such as demo:browser-safari
+	// and demo:platform-ios. Empty, nothing is added.
+	//
+	// Like an answer, they are kept on the Participant (spec.groups) at
+	// enrollment and are only what the browser says it is.
+	// +optional
+	BrowserGroups *BrowserGroups `json:"browserGroups,omitempty"`
 	// EndsAt can be extended without changing participant identities.
 	EndsAt metav1.Time `json:"endsAt"`
 	// +kubebuilder:default=Closed
@@ -183,6 +191,25 @@ type RoomAnswer struct {
 	// +kubebuilder:validation:Pattern="^demo:[a-zA-Z0-9][a-zA-Z0-9:_-]*$"
 	// +kubebuilder:validation:MaxLength=128
 	Group string `json:"group"`
+}
+
+// BrowserGroups names the two groups that say how a participant joined:
+// <prefix>browser-<browser> and <prefix>platform-<platform>.
+//
+// Both names come from fixed lists, whatever the browser sends. Browsers:
+// safari, chrome, firefox, edge, samsung, opera, other. Platforms: ios,
+// android, macos, windows, chromeos, linux, other. A forged User-Agent can
+// only pick another name from them, and anyone can claim to be Safari, so
+// bind these groups only to what anyone may have.
+//
+// There is no phone brand: Chrome on Android no longer sends one. ios is the
+// closest there is to Apple.
+type BrowserGroups struct {
+	// Prefix starts both names: demo: gives demo:browser-safari, and
+	// demo:my-talk: gives demo:my-talk:browser-safari.
+	// +kubebuilder:validation:MaxLength=100
+	// +kubebuilder:validation:Pattern="^demo:([a-zA-Z0-9][a-zA-Z0-9:_-]*)?$"
+	Prefix string `json:"prefix"`
 }
 
 type Code struct {

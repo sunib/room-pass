@@ -93,6 +93,7 @@ spec:
 | `attributionNote` | Optional, bounded text shown beside the issued address. The operator's sentence about what the application does with it; Room Pass only guarantees the address is unroutable |
 | `appearance` | Optional, mutable, display only: a tagline, a picture and its alt text, an accent colour, a background colour and a background image. Pictures are same-origin paths on the join host; colours are `#rrggbb`. It cannot reword the page's statements about identity |
 | `question` | Optional, mutable: a prompt and 2–8 answers, each a label and a group under `audienceGroup`'s rules. Every joining participant picks one; its group is stored on the Participant and asserted beside `audienceGroup`. Self-selected, so never stronger than the display name. Without it, nobody is asked and no group is added |
+| `browserGroups` | Optional, mutable: a `demo:` prefix. Adds `<prefix>browser-<name>` and `<prefix>platform-<name>`, each name from a fixed list the User-Agent only selects from, stored on the Participant at enrollment. The join page names what will be shared. Self-reported by the browser, so never stronger than the display name |
 | `endsAt` | Required timestamp, editable by operators to accommodate schedule changes; shortening ends access sooner and extending can reopen an expired, non-stopped Room |
 | `enrollment` | `Open` or `Closed`; defaults to `Closed` |
 | `stopped` | Defaults to false; transition to true is irreversible for this object |
@@ -259,7 +260,7 @@ The room code proves possession, not physical attendance or one-person-one-vote.
 | Participant ID | Derived by the server from the display name, unique within the event and immutable once enrolled; public, never a credential |
 | Display name | Participant-supplied, validated and escaped; never used as an authorization key |
 | Author email | Server-generated `<participant-id>@koudijs.dev.test`; never supplied by the participant, and shown on the join page while the name is typed |
-| Groups | `audienceGroup`, plus the group of the participant's answer when the Room asks a question. Both come from event configuration: a participant chooses among the Room's answers and never names a group |
+| Groups | `audienceGroup`, plus the group of the participant's answer when the Room asks a question, plus browser and platform groups when the Room sets `browserGroups`. All come from event configuration: a participant chooses among the Room's answers, a browser's User-Agent selects from fixed names, and neither ever names a group |
 | Session | Signed/encrypted cookie referencing persisted Room and Participant UIDs; no separate Session CRD |
 
 Validate display names using the existing Git-safe rules where suitable: reject control

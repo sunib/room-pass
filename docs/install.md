@@ -234,6 +234,35 @@ Somebody who picks Svelte signs in with the groups `demo:my-talk` and
 - **Set it before you go on stage.** Editing it starts a fresh code epoch, and
   anyone who joined before the question existed is not asked it.
 
+### Put the browser in the groups (optional)
+
+`spec.browserGroups` adds two groups to everyone who joins, named after the
+browser and the platform they joined with. Nobody is asked anything; the join
+page says what it will share ("and your browser, Safari on iOS").
+
+```yaml
+spec:
+  browserGroups:
+    prefix: "demo:"        # demo:browser-safari, demo:platform-ios
+```
+
+| Group | Names |
+|---|---|
+| `<prefix>browser-…` | `safari`, `chrome`, `firefox`, `edge`, `samsung`, `opera`, `other` |
+| `<prefix>platform-…` | `ios`, `android`, `macos`, `windows`, `chromeos`, `linux`, `other` |
+
+- **It is what the browser says it is.** Room Pass reads the User-Agent and
+  only ever picks a name from these lists, so a forged one gains nothing but
+  another name from them. Anyone can claim to be Safari, so bind these groups
+  only to what anyone may have.
+- **There is no phone brand.** Chrome on Android stopped sending one when the
+  User-Agent was frozen; `platform-ios` is the closest there is to "Apple".
+- **The prefix keeps them apart.** `demo:my-talk:` gives
+  `demo:my-talk:browser-safari`. It must start with `demo:`, like every group
+  here.
+- **They are kept on the Participant** in `spec.groups` beside the answer, from
+  the browser that enrolled. Like the question, set it before anyone joins.
+
 ## 6. Connect your application
 
 Your application is an OIDC client of the issuer:

@@ -76,7 +76,11 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 		func(r *api.Room) {
 			r.Spec.Question = question(answer("A", "demo:a"), answer("B", "demo:b"))
 			r.Spec.Question.Prompt = ""
-		}} {
+		},
+		// The browser groups' prefix must leave every name a demo: group.
+		func(r *api.Room) { r.Spec.BrowserGroups = &api.BrowserGroups{Prefix: "system:"} },
+		func(r *api.Room) { r.Spec.BrowserGroups = &api.BrowserGroups{Prefix: "demo:a,system:"} },
+		func(r *api.Room) { r.Spec.BrowserGroups = &api.BrowserGroups{} }} {
 		bad := room.DeepCopy()
 		mutate(bad)
 		if db.Update(ctx, bad) == nil {
@@ -110,6 +114,12 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 	}
 	if e = db.Get(ctx, key, room); e != nil || room.Spec.Question == nil || !reflect.DeepEqual(*room.Spec.Question, *asked) {
 		t.Fatalf("question did not round-trip: %+v %v", room.Spec.Question, e)
+	}
+	for _, prefix := range []string{"demo:", "demo:my-talk:"} {
+		room.Spec.BrowserGroups = &api.BrowserGroups{Prefix: prefix}
+		if e = db.Update(ctx, room); e != nil {
+			t.Fatalf("browserGroups prefix %q rejected: %v", prefix, e)
+		}
 	}
 	rec := &controller.Reconciler{Client: db, Room: key}
 	if _, e = rec.Reconcile(ctx, ctrl.Request{NamespacedName: key}); e != nil {
