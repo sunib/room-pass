@@ -102,7 +102,8 @@ rm hash-key block-key
 ```
 
 The client secret, shared by Dex and your application. Dex reads it only when
-its pod starts, so restart Dex after changing it:
+its pod starts, so restart Dex after changing it (a restart costs participants one
+tap through sign-in; Dex keeps no state worth keeping):
 
 ```sh
 kubectl -n room-pass create secret generic dex-clients \
@@ -287,4 +288,5 @@ cookie keys); a major release says in the CHANGELOG what to do.
 | Dex stays in `CreateContainerConfigError` | The `dex-clients` Secret does not exist yet. |
 | `invalid client` at login | The client secret changed and Dex was not restarted, or the application holds a different value. |
 | Nobody can join | `endsAt` has passed, enrollment is Closed, or the Room is stopped: `kubectl -n room-pass get rooms.room-pass.koudijs.dev demo -o yaml`. |
-| Everyone was signed out | The cookie Secret was replaced, or the Room was recreated. |
+| Everyone had to tap through sign-in again, as the same name | Dex restarted. It keeps its state in memory, so its signing keys changed; nothing was lost. |
+| Everyone was signed out and had to enroll again | The cookie Secret was replaced, or the Room was recreated. |

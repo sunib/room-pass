@@ -1,9 +1,10 @@
 # Dex's configuration: https://dexidp.io/docs/configuration/
 issuer: https://login.example.com
+# In memory: nothing to back up and no volume. A Dex restart costs a one-tap
+# sign-in (deploy/dex/deployment.yaml). To keep tokens valid across Dex
+# restarts instead, use `type: kubernetes` with Dex's CRDs installed.
 storage:
-  type: sqlite3
-  config:
-    file: /var/dex/dex.db
+  type: memory
 web:
   http: 0.0.0.0:5556
 oauth2:

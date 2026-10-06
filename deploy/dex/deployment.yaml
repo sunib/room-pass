@@ -1,10 +1,17 @@
-# One replica on a SQLite file. Dex keeps its signing keys, refresh tokens and
-# pending authorization requests in storage; the in-memory store loses all three
-# on every restart, which signs out every application session mid-event.
+# One replica, no disk. Dex keeps its state in memory (dex-config.yaml), and
+# for Room Pass that state is disposable: the participant's identity lives in
+# Room Pass's Participants and cookie, the subject is computed rather than
+# stored, and the authproxy connector issues no refresh tokens.
 #
-# Recreate, because the volume is ReadWriteOnce: a rolling update would start
-# the new pod before releasing the old one's claim, and on a multi-node cluster
-# it can wait forever for a volume that is still attached elsewhere.
+# What a restart costs: new signing keys, so ID tokens issued before it no
+# longer verify, and logins in progress start over. An application whose token
+# stops verifying (or that gets 401 from Kubernetes) sends the participant back
+# to sign in, and Room Pass recognises the enrolled browser: one tap, same
+# identity.
+#
+# Exactly one replica, and Recreate: two Dex pods with in-memory storage are two
+# issuers with different keys, so a login that starts on one cannot finish on
+# the other, and a token one signs does not verify against the other's keys.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,8 +48,6 @@ spec:
             - name: config
               mountPath: /etc/dex
               readOnly: true
-            - name: data
-              mountPath: /var/dex
             # The image's entrypoint renders the config into /tmp before
             # starting Dex; the root filesystem stays read-only.
             - name: tmp
@@ -66,9 +71,6 @@ spec:
         - name: config
           configMap:
             name: dex
-        - name: data
-          persistentVolumeClaim:
-            claimName: dex
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi

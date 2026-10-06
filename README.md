@@ -129,7 +129,7 @@ and the components below from the first release after 2.0.0):
 |---|---|
 | [config/crd](config/crd) | the Room and Participant CRDs; apply first and wait for them to be Established |
 | [deploy/base](deploy/base) | Room Pass, its ServiceAccount and RBAC, with no hostnames |
-| [deploy/dex](deploy/dex) | Dex on SQLite with a NetworkPolicy admitting only Room Pass; its config is yours |
+| [deploy/dex](deploy/dex) | Dex in memory, with no volume, and a NetworkPolicy admitting only Room Pass; its config is yours |
 | [deploy/edge/traefik](deploy/edge/traefik) | the edge rate limit and identity-header stripping, as Traefik Middlewares |
 | [deploy/apiserver](deploy/apiserver/authentication-config.yaml) | the kube-apiserver's structured authentication config for the issuer |
 | [deploy/example](deploy/example) | all of the above for one event, with placeholder hosts, plus a Room |
@@ -155,8 +155,9 @@ Keep keys out of Git, logs and image layers. Back up the Secret together with Ro
 Participants using your Kubernetes/etcd backup process. A restart preserves enrollment;
 losing or replacing keys signs everyone out. Rotation with multiple verification keys is
 not implemented. The local fixture preserves these keys on repeated `e2e-up` runs.
-`deploy/dex` keeps Dex's signing keys and pending logins in SQLite on a volume, so a Dex
-restart does not sign applications out. `e2e-up` restarts Room Pass to load source changes.
+`deploy/dex` keeps Dex's state in memory: a Dex restart rotates its signing keys, so ID
+tokens issued before it stop verifying, and applications send participants back through
+a one-tap sign-in as the same identity. `e2e-up` restarts Room Pass to load source changes.
 
 Build Room Pass independently:
 
