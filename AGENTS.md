@@ -49,6 +49,10 @@ change them without a major release and a migration note:
 - the Dex connector ID `room-pass`, the identity headers sent to Dex's authproxy
   connector, and the cookie-key Secret name pinned in RBAC.
 
+Adding an optional, display-only field to the Room, such as `spec.appearance`,
+changes none of these and is a `feat:`. It must leave a Room that does not set
+it looking exactly as before, because the minor deploys itself.
+
 Known Voter-era assumptions that should become configuration, not grow:
 `demo:` group validation and the `@koudijs.dev.test` address suffix. See
 [OPEN-SOURCE-PLAN.md](OPEN-SOURCE-PLAN.md).

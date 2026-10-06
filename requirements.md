@@ -91,6 +91,7 @@ spec:
 |---|---|
 | `title` | Required, nonempty, bounded display text |
 | `attributionNote` | Optional, bounded text shown beside the issued address. The operator's sentence about what the application does with it; Room Pass only guarantees the address is unroutable |
+| `appearance` | Optional, mutable, display only: a tagline, a picture and its alt text, an accent colour, a background colour and a background image. Pictures are same-origin paths on the join host; colours are `#rrggbb`. It cannot reword the page's statements about identity |
 | `endsAt` | Required timestamp, editable by operators to accommodate schedule changes; shortening ends access sooner and extending can reopen an expired, non-stopped Room |
 | `enrollment` | `Open` or `Closed`; defaults to `Closed` |
 | `stopped` | Defaults to false; transition to true is irreversible for this object |

@@ -158,6 +158,41 @@ that, silently. Settle them before the event.
 be at most four `rotateEvery` periods; a slower rotation with the same
 `validFor` exposes nothing more, it only redraws the QR code less often.
 
+### Dress the join page for the talk (optional)
+
+`spec.appearance` gives the join page a look for the event without writing any
+HTML. Every field is optional, and without any the page looks as it always has.
+
+```yaml
+spec:
+  title: Everyone gets a vote
+  appearance:
+    tagline: Platform Day 2027 · Room B · Thursday 14:30   # a line under the title
+    picture: /talks/platform-day/logo.png                  # above the title
+    pictureAlt: Platform Day 2027                          # empty: decorative
+    accentColor: "#f2a541"                                 # buttons and focus rings
+    backgroundColor: "#0f3d3e"                             # puts the form on a card
+    backgroundImage: /talks/platform-day/stage.jpg         # covers the page
+```
+
+- **Pictures are paths on the application's host.** The join page runs there,
+  and its CSP loads images from that origin only, so Room Pass needs no change
+  for them: serve the files from your application, or from anything your edge
+  routes on that host. Serve them without a login, because participants have
+  not signed in yet. Absolute URLs and `//host` paths are refused at apply time.
+- **Keep the background image small.** The whole room loads it at the same
+  moment over the venue's network; 200 to 300 KB of JPEG or WebP is plenty for a
+  phone. Pick a `backgroundColor` close to it, because that shows first.
+- **Colours are `#rrggbb`.** The button text is white or near-black, whichever
+  contrasts more with `accentColor`.
+- **Set it before you go on stage.** Like any change to a Room's spec, editing
+  it starts a fresh code epoch: the code on the screen stops working, and
+  anyone typing it has to type the new one.
+
+The instructions, the issued address and the notice that a name is an
+unverified label stay as Room Pass writes them; `attributionNote` remains the
+one sentence an operator adds about identity.
+
 ## 6. Connect your application
 
 Your application is an OIDC client of the issuer:

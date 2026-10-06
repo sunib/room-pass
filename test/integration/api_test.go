@@ -53,7 +53,16 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 	if room.Spec.JoinCode.ValidFor != "30s" {
 		t.Fatalf("defaults missing: %+v", room.Spec.JoinCode)
 	}
-	for _, mutate := range []func(*api.Room){func(r *api.Room) { r.Spec.Enrollment = "Maybe" }, func(r *api.Room) { r.Spec.AudienceGroup = "system:masters" }, func(r *api.Room) { r.Spec.AllowedReturnURLs = []string{"https://evil.test/"} }, func(r *api.Room) { r.Spec.JoinCode.ValidFor = "60s" }, func(r *api.Room) { r.Spec.AttributionNote = "<b>bold</b>" }, func(r *api.Room) { r.Spec.AttributionNote = strings.Repeat("x", 201) }} {
+	for _, mutate := range []func(*api.Room){func(r *api.Room) { r.Spec.Enrollment = "Maybe" }, func(r *api.Room) { r.Spec.AudienceGroup = "system:masters" }, func(r *api.Room) { r.Spec.AllowedReturnURLs = []string{"https://evil.test/"} }, func(r *api.Room) { r.Spec.JoinCode.ValidFor = "60s" }, func(r *api.Room) { r.Spec.AttributionNote = "<b>bold</b>" }, func(r *api.Room) { r.Spec.AttributionNote = strings.Repeat("x", 201) },
+		// Appearance lands in CSS and URL contexts on the join page, and its
+		// pictures may come from the join host only.
+		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{AccentColor: "red"} },
+		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{BackgroundColor: "#fff;x:y"} },
+		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{Picture: "https://evil.test/logo.png"} },
+		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{Picture: "//evil.test/logo.png"} },
+		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{BackgroundImage: `/a")`} },
+		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{Tagline: "<b>bold</b>"} },
+		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{PictureAlt: strings.Repeat("x", 121)} }} {
 		bad := room.DeepCopy()
 		mutate(bad)
 		if db.Update(ctx, bad) == nil {
@@ -66,6 +75,19 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 	}
 	if e = db.Get(ctx, key, room); e != nil || room.Spec.AttributionNote != "It labels your changes in Git." {
 		t.Fatalf("attributionNote did not round-trip: %q %v", room.Spec.AttributionNote, e)
+	}
+	look := &api.RoomAppearance{Tagline: "Platform Day · Room B", Picture: "/talks/logo.png?v=2", PictureAlt: "Platform Day", AccentColor: "#F2A541", BackgroundColor: "#0f3d3e", BackgroundImage: "/talks/stage.jpg"}
+	room.Spec.Appearance = look
+	if e = db.Update(ctx, room); e != nil {
+		t.Fatalf("appearance rejected: %v", e)
+	}
+	if e = db.Get(ctx, key, room); e != nil || room.Spec.Appearance == nil || *room.Spec.Appearance != *look {
+		t.Fatalf("appearance did not round-trip: %+v %v", room.Spec.Appearance, e)
+	}
+	// Mutable: the next talk in the same Room brings its own.
+	room.Spec.Appearance = nil
+	if e = db.Update(ctx, room); e != nil {
+		t.Fatalf("appearance cannot be removed: %v", e)
 	}
 	rec := &controller.Reconciler{Client: db, Room: key}
 	if _, e = rec.Reconcile(ctx, ctrl.Request{NamespacedName: key}); e != nil {

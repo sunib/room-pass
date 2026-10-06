@@ -13,6 +13,16 @@ spec:
   title: My talk
   # Shown on the join page: what the application does with the name.
   attributionNote: Your name labels the changes you make during the session.
+  # Optional: dress the join page for this talk. Pictures are paths your
+  # application serves on its own host, without a login. Editing this starts a
+  # fresh join code, so set it before the event.
+  # appearance:
+  #   tagline: My conference · Room B · Thursday 14:30
+  #   picture: /talks/my-talk/logo.png
+  #   pictureAlt: My conference
+  #   accentColor: "#f2a541"
+  #   backgroundColor: "#0f3d3e"
+  #   backgroundImage: /talks/my-talk/stage.jpg
   # Nobody can join after this. Move it before every event.
   endsAt: "2026-12-31T18:00:00Z"
   enrollment: Open

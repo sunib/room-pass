@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -1042,5 +1043,142 @@ func TestReturningParticipantSeesTheirIssuedAddress(t *testing.T) {
 	}
 	if strings.Contains(body, "Enter the room code") {
 		t.Error("the returning page asks for a code it does not show a field for")
+	}
+}
+
+// setAppearance replaces the fixture Room's appearance, as an operator's apply
+// would.
+func setAppearance(t *testing.T, s *Server, db client.Client, a *api.RoomAppearance) {
+	t.Helper()
+	room := &api.Room{}
+	if e := db.Get(context.Background(), s.cfg.Room, room); e != nil {
+		t.Fatal(e)
+	}
+	room.Spec.Appearance = a
+	if e := db.Update(context.Background(), room); e != nil {
+		t.Fatal(e)
+	}
+}
+
+// A Room without an appearance is every Room that existed before the field
+// did, including the one a minor release rolls out to unattended. Its page must
+// not change: no card, no images, and the button in its old colour.
+func TestAppearanceIsEmptyUntilARoomSetsOne(t *testing.T) {
+	s, db := fixture(t, "http://dex.test")
+	for _, a := range []*api.RoomAppearance{nil, {}} {
+		setAppearance(t, s, db, a)
+		body := newBrowser().request(s, "GET", "https://demo.test/join", nil).Body.String()
+		for _, absent := range []string{`class="backdrop"`, "<img", "--accent:", `class="tagline"`, "body{background:#"} {
+			if strings.Contains(body, absent) {
+				t.Errorf("appearance %+v: the plain page contains %q", a, absent)
+			}
+		}
+		if !strings.Contains(body, "<body><main><h1>Demo</h1>") {
+			t.Errorf("appearance %+v: the plain page's heading moved: %s", a, body)
+		}
+		if !strings.Contains(body, "background:var(--accent,#1749a5);color:var(--on-accent,white)") {
+			t.Errorf("appearance %+v: the button lost its default colours", a)
+		}
+	}
+}
+
+func TestAppearanceDressesTheJoinPage(t *testing.T) {
+	s, db := fixture(t, "http://dex.test")
+	setAppearance(t, s, db, &api.RoomAppearance{
+		Tagline:         "Platform Day 2027 · Room B · Thursday 14:30",
+		Picture:         "/talks/platform-day/logo.png?v=2",
+		PictureAlt:      "Platform Day 2027",
+		AccentColor:     "#f2a541",
+		BackgroundColor: "#0f3d3e",
+		BackgroundImage: "/talks/platform-day/stage.jpg",
+	})
+	w := newBrowser().request(s, "GET", "https://demo.test/join", nil)
+	body := w.Body.String()
+	for _, want := range []string{
+		`<p class="tagline">Platform Day 2027 · Room B · Thursday 14:30</p>`,
+		`<img class="picture" src="/talks/platform-day/logo.png?v=2" alt="Platform Day 2027">`,
+		`<img class="backdrop-image" src="/talks/platform-day/stage.jpg" alt="">`,
+		`<body class="backdrop">`,
+		// Amber is too light for white text, so the button gets near-black.
+		":root{--accent:#f2a541;--on-accent:#111827}",
+		"outline:3px solid #f2a541",
+		"body{background:#0f3d3e}",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the dressed page lacks %q:\n%s", want, body)
+		}
+	}
+	// What the page says about identity is not the operator's to dress.
+	for _, kept := range []string{"Enter the room code and choose a display name.", "never a real mailbox", "Your name is an unverified label, not a verified identity."} {
+		if !strings.Contains(body, kept) {
+			t.Errorf("the dressed page dropped %q", kept)
+		}
+	}
+	// Same-origin paths are why none of this needs the policy to change.
+	if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self';") {
+		t.Errorf("images are no longer limited to the join host: %s", csp)
+	}
+}
+
+// The CRD refuses all of these. A Room that holds one anyway -- an older CRD,
+// a schema edited by hand -- loses the field instead of reaching another host
+// or writing its own CSS.
+func TestAppearanceThatEscapedTheSchemaIsDropped(t *testing.T) {
+	s, db := fixture(t, "http://dex.test")
+	setAppearance(t, s, db, &api.RoomAppearance{
+		Tagline:         `<b>bold</b>`,
+		Picture:         "//evil.example/logo.png",
+		AccentColor:     "red;background:url(//evil.example/x)",
+		BackgroundColor: "#fff}body{display:none",
+		BackgroundImage: "https://evil.example/stage.jpg",
+	})
+	body := newBrowser().request(s, "GET", "https://demo.test/join", nil).Body.String()
+	for _, absent := range []string{"evil.example", "display:none", "<img", `class="backdrop"`, "<b>bold</b>"} {
+		if strings.Contains(body, absent) {
+			t.Errorf("an unchecked appearance value reached the page: %q", absent)
+		}
+	}
+	if !strings.Contains(body, `<p class="tagline">&lt;b&gt;bold&lt;/b&gt;</p>`) {
+		t.Errorf("the tagline is not escaped as text: %s", body)
+	}
+}
+
+func TestButtonTextContrastsWithTheAccent(t *testing.T) {
+	for accent, want := range map[string]string{
+		"#1749a5": "#ffffff", // Room Pass's own blue
+		"#000000": "#ffffff",
+		"#c2410c": "#ffffff",
+		"#f2a541": nearBlack,
+		"#ffffff": nearBlack,
+		"#FFD60A": nearBlack,
+	} {
+		if got := onAccent(accent); got != want {
+			t.Errorf("onAccent(%s) = %s, want %s", accent, got, want)
+		}
+	}
+}
+
+// The server's patterns are a second check on the CRD's, so they must be the
+// same ones: a looser CRD admits a Room the page silently undresses, a looser
+// server is no second check at all.
+func TestAppearancePatternsAreTheCRDs(t *testing.T) {
+	crd, e := os.ReadFile("../../config/crd/bases/room-pass.koudijs.dev_rooms.yaml")
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, re := range []*regexp.Regexp{hexColor, sameOriginPath} {
+		if n := strings.Count(string(crd), "pattern: "+re.String()+"\n"); n != 2 {
+			t.Errorf("the CRD carries %s %d times, want 2 (one per field that uses it)", re, n)
+		}
+	}
+	for _, path := range []string{"/logo.png", "/talks/a-b_c/logo.webp?v=2&w=1", "/%E2%9C%93.png"} {
+		if !sameOriginPath.MatchString(path) {
+			t.Errorf("%q should be accepted", path)
+		}
+	}
+	for _, path := range []string{"", "/", "//evil.example/x.png", "https://evil.example/x.png", "logo.png", `/\evil.example`, "/a b.png", `/a".png`, "/a'.png", "/a(.png", "/a#frag"} {
+		if sameOriginPath.MatchString(path) {
+			t.Errorf("%q should be refused", path)
+		}
 	}
 }

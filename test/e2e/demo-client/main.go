@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
@@ -10,6 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log"
 	"net/http"
@@ -162,6 +166,23 @@ func main() {
 			http.NotFound(w, r)
 		}
 	})
+	// The pictures the browser suite's dressed Room points at. They are here
+	// because that is where a real installation keeps them: on the
+	// application's host, beside the join page, whose CSP admits images from its
+	// own origin only.
+	talk := map[string][]byte{
+		"/app/talk/logo.png":  swatch(240, 80, color.RGBA{242, 165, 65, 255}, color.RGBA{42, 157, 143, 255}),
+		"/app/talk/stage.png": swatch(120, 240, color.RGBA{59, 22, 38, 255}, color.RGBA{8, 4, 6, 255}),
+	}
+	http.HandleFunc("/app/talk/", func(w http.ResponseWriter, r *http.Request) {
+		b, ok := talk[r.URL.Path]
+		if !ok || r.Method != "GET" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(b)
+	})
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
 	log.Fatal((&http.Server{Addr: ":8080", ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, Handler: http.DefaultServeMux}).ListenAndServe())
 }
@@ -180,4 +201,23 @@ func joinCode(raw string) string {
 		}
 	}
 	return code
+}
+
+// swatch is a w x h PNG shading from one colour at the top to another at the
+// bottom: enough of a picture for a browser to prove it loaded one.
+func swatch(w, h int, from, to color.RGBA) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	mix := func(a, b uint8, f float64) uint8 { return uint8(float64(a) + (float64(b)-float64(a))*f) }
+	for y := 0; y < h; y++ {
+		f := float64(y) / float64(h-1)
+		c := color.RGBA{mix(from.R, to.R, f), mix(from.G, to.G, f), mix(from.B, to.B, f), 255}
+		for x := 0; x < w; x++ {
+			img.SetRGBA(x, y, c)
+		}
+	}
+	var b bytes.Buffer
+	if e := png.Encode(&b, img); e != nil {
+		panic(e)
+	}
+	return b.Bytes()
 }
