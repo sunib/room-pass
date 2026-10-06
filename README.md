@@ -141,7 +141,11 @@ are required, and Room Pass refuses to start without them; add them with a
 strategic-merge patch on the `room-pass` container's `env`, which merges by name, so a
 variable added to the base later still arrives. A Room needs a future end time, a
 `demo:`-prefixed group, and exact HTTPS return URLs that also appear in
-`ALLOWED_RETURN_URLS`. Required cookie Secret:
+`ALLOWED_RETURN_URLS`. It may also dress the join page for the talk with
+`spec.appearance`: a tagline, a picture, an accent colour and a background,
+served from the application's own host
+([install guide](docs/install.md#dress-the-join-page-for-the-talk-optional)).
+Required cookie Secret:
 
 ```sh
 umask 077

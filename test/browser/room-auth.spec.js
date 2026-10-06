@@ -11,6 +11,31 @@ const room = () =>
 const participants = () =>
   JSON.parse(kube("-n", "room-pass", "get", "participants", "-o", "json"))
     .items;
+const patchRoom = (spec) =>
+  kube(
+    "-n",
+    "room-pass",
+    "patch",
+    "room",
+    "demo",
+    "--type=merge",
+    "-p",
+    JSON.stringify({ spec }),
+  );
+// Any spec change starts a fresh code epoch: the controller clears every code
+// and issues a new one only once it has seen the change. A test that changed
+// the Room waits for that before going on, or before handing the Room back to
+// a test that reads its code straight away.
+const roomSettled = () =>
+  expect
+    .poll(() => {
+      const r = room();
+      return (
+        r.status.observedGeneration === r.metadata.generation &&
+        (r.spec.enrollment !== "Open" || Boolean(r.status.joinCode?.code))
+      );
+    })
+    .toBe(true);
 // What the participant TYPES. Room Pass stores the folded form -- spaces become
 // dashes -- because that value has to be legal as a Kubernetes label value, a
 // path segment in the mirrored audit trail, and the tail of an object name.
@@ -162,16 +187,7 @@ test("a tampered form CSRF token does not enroll", async ({ page }) => {
 test("closing enrollment removes the browser join form", async ({ page }) => {
   const enrollment = room().spec.enrollment;
   try {
-    kube(
-      "-n",
-      "room-pass",
-      "patch",
-      "room",
-      "demo",
-      "--type=merge",
-      "-p",
-      JSON.stringify({ spec: { enrollment: "Closed" } }),
-    );
+    patchRoom({ enrollment: "Closed" });
     await page.goto("/app/login");
     await expect(
       page.getByText(
@@ -184,28 +200,60 @@ test("closing enrollment removes the browser join form", async ({ page }) => {
       page.getByRole("button", { name: "Continue", exact: true }),
     ).toHaveCount(0);
   } finally {
-    kube(
-      "-n",
-      "room-pass",
-      "patch",
-      "room",
-      "demo",
-      "--type=merge",
-      "-p",
-      JSON.stringify({ spec: { enrollment } }),
+    patchRoom({ enrollment });
+    await roomSettled();
+  }
+});
+
+// A dressed Room, in the browser that enforces the join page's CSP. The
+// pictures come from the application on the join host, which is why the policy
+// needed no change for them; one it blocked would load nothing and say so only
+// on the console, so both are checked.
+test("a Room's appearance dresses the join page with pictures from the join host", async ({
+  page,
+}, testInfo) => {
+  const blocked = [];
+  page.on("console", (m) => {
+    if (/Content Security Policy/i.test(m.text())) blocked.push(m.text());
+  });
+  try {
+    patchRoom({
+      appearance: {
+        tagline: "Platform Day 2027 · Room B",
+        picture: "/app/talk/logo.png",
+        pictureAlt: "Platform Day 2027",
+        accentColor: "#f2a541",
+        backgroundColor: "#0f3d3e",
+        backgroundImage: "/app/talk/stage.png",
+      },
+    });
+    await roomSettled();
+    await page.goto("/app/login");
+    await expect(
+      page.getByText("Platform Day 2027 · Room B", { exact: true }),
+    ).toBeVisible();
+    const loaded = (img) =>
+      expect.poll(() => img.evaluate((i) => i.complete && i.naturalWidth));
+    await loaded(page.getByRole("img", { name: "Platform Day 2027" })).toBe(
+      240,
     );
-    // Closing cleared status.joinCode, and the controller issues a new one only
-    // after it sees the reopen. The next test reads that code straight away, so
-    // the room is not handed back until the controller has caught up.
-    await expect
-      .poll(() => {
-        const r = room();
-        return (
-          r.status.observedGeneration === r.metadata.generation &&
-          (enrollment !== "Open" || Boolean(r.status.joinCode?.code))
-        );
-      })
-      .toBe(true);
+    await loaded(page.locator("img.backdrop-image")).toBe(120);
+    // Amber is too light for white text; Room Pass picks near-black.
+    const button = page.getByRole("button", { name: "Continue", exact: true });
+    await expect(button).toHaveCSS("background-color", "rgb(242, 165, 65)");
+    await expect(button).toHaveCSS("color", "rgb(17, 24, 39)");
+    await expect(page.locator("main")).toHaveCSS(
+      "background-color",
+      "rgb(255, 255, 255)",
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("dressed.png"),
+      fullPage: true,
+    });
+    expect(blocked).toEqual([]);
+  } finally {
+    patchRoom({ appearance: null });
+    await roomSettled();
   }
 });
 

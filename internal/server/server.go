@@ -10,9 +10,12 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -573,6 +576,77 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 var page = template.Must(template.New("join").Parse(pageSource))
 
+// look is a Room's appearance as the join page renders it; nil leaves the
+// page looking exactly as it did before Rooms had one. Colours and paths are checked
+// again here, not only by the CRD, because they land in CSS and URL contexts: a
+// Room written under an older or hand-edited schema loses the field rather than
+// gaining a way out of the page. html/template escapes both contexts as well.
+type look struct {
+	Tagline, Picture, PictureAlt, Accent, OnAccent, Background, BackgroundImage string
+}
+
+// Backdrop puts the form on a card. Any background, colour or photo, can be too
+// dark or too busy to read the form against directly.
+func (l *look) Backdrop() bool { return l.Background != "" || l.BackgroundImage != "" }
+
+// The same patterns as the CRD's; TestAppearancePatternsAreTheCRDs keeps them
+// equal. A path must stay on the join host -- "//host" would leave it -- which
+// is also all the page's CSP (img-src 'self') would load.
+var (
+	hexColor       = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+	sameOriginPath = regexp.MustCompile(`^/[A-Za-z0-9._~%!$&+,;=:@?-][A-Za-z0-9._~%!$&+,;=:@/?-]*$`)
+)
+
+func lookOf(room *api.Room) *look {
+	a := room.Spec.Appearance
+	if a == nil {
+		return nil
+	}
+	l := &look{Tagline: a.Tagline}
+	if sameOriginPath.MatchString(a.Picture) {
+		l.Picture, l.PictureAlt = a.Picture, a.PictureAlt
+	}
+	if hexColor.MatchString(a.AccentColor) {
+		l.Accent, l.OnAccent = a.AccentColor, onAccent(a.AccentColor)
+	}
+	if hexColor.MatchString(a.BackgroundColor) {
+		l.Background = a.BackgroundColor
+	}
+	if sameOriginPath.MatchString(a.BackgroundImage) {
+		l.BackgroundImage = a.BackgroundImage
+	}
+	return l
+}
+
+const nearBlack = "#111827"
+
+// onAccent is the text colour for a button filled with accent: white or
+// near-black, whichever has the higher WCAG 2 contrast ratio. An operator picks
+// a brand colour; nobody should have to work out which text stays readable on it.
+func onAccent(accent string) string {
+	l := luminance(accent)
+	if (1+0.05)/(l+0.05) >= (l+0.05)/(luminance(nearBlack)+0.05) {
+		return "#ffffff"
+	}
+	return nearBlack
+}
+
+// luminance is WCAG 2's relative luminance of a #rrggbb colour.
+func luminance(hex string) float64 {
+	var sum float64
+	for i, weight := range []float64{0.2126, 0.7152, 0.0722} {
+		v, _ := strconv.ParseUint(hex[1+2*i:3+2*i], 16, 8)
+		c := float64(v) / 255
+		if c <= 0.03928 {
+			c /= 12.92
+		} else {
+			c = math.Pow((c+0.055)/1.055, 2.4)
+		}
+		sum += weight * c
+	}
+	return sum
+}
+
 // previewScript keeps the stored NAME and the address on the join page in step
 // with the name box as
 // it is typed. It is the browser half of participantID and must agree with it
@@ -591,7 +665,7 @@ var previewScriptSource = func() string {
 	return "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
 }()
 
-var pageSource = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Join the room</title><style>body{font:18px system-ui;margin:3rem auto;padding:0 1rem;max-width:30rem;background:#f8fafc;color:#172033}input,button{box-sizing:border-box;width:100%;padding:.8rem;margin:.4rem 0 1rem;font:inherit}button{background:#1749a5;color:white;border:0;border-radius:.4rem}label{display:block}small{line-height:1.5}.scanned{background:#e8f0fe;border-radius:.4rem;padding:.6rem .8rem;margin:.4rem 0 1rem}.error{color:#b3261e;font-weight:600}input[aria-invalid=true]{border:2px solid #b3261e;background:#fff5f5}.issued{color:#64748b;font-size:.8em;line-height:1.45;margin:-.7rem 0 1.4rem}.issued .line{display:block;font-size:1.15em;margin-bottom:.35rem}.addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#475569;word-break:break-all}</style><h1>{{.Title}}</h1><p>{{.Message}}</p>{{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}{{if .Form}}<form method="post" action="/join"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="handoff" value="{{.Handoff}}"><input type="hidden" name="return" value="{{.Return}}">{{if .Enrolled}}<p>You’re already enrolled as <strong>{{.EnrolledName}}</strong>. Continue with the same identity.</p><p class="issued"><span class="line">You are joining as <span class="addr">{{.EnrolledEmail}}</span></span>Room Pass built that address from your name, which is why there was nothing to fill in: it is never a real mailbox.{{with .AttributionNote}} {{.}}{{end}}</p>{{else}}{{if .Scanned}}<p class="scanned">Room code <strong>{{.Scanned}}</strong>, from the code you scanned. <input type="hidden" name="code" value="{{.Scanned}}"><input type="hidden" name="scanned" value="1"></p>{{else}}<label>Room code<input name="code" required maxlength="24" autocomplete="off" autocapitalize="characters" placeholder="BCDFGH" value="{{.Code}}"{{if .CodeInvalid}} aria-invalid="true"{{end}}{{if eq .Focus "code"}} autofocus{{end}}></label>{{end}}<label>Display name<input id="rp-name" name="name" required maxlength="64" autocomplete="nickname" value="{{.Name}}"{{if .NameInvalid}} aria-invalid="true"{{end}}{{if eq .Focus "name"}} autofocus{{end}}></label><p class="issued"><span class="line">You will appear as <output id="rp-display" for="rp-name"><strong>{{.Display}}</strong></output></span><span class="line">You will join as <output id="rp-email" for="rp-name" class="addr">{{.Email}}</output></span>Room Pass builds both from your name, so there is nothing to fill in: spaces and accents are folded, and the address is never a real mailbox.{{with .AttributionNote}} {{.}}{{end}}</p>{{end}}<button>Continue</button></form>{{end}}{{if .Enrolled}}<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Sign out of this browser</button></form>{{end}}<small>Your name is an unverified label, not a verified identity. It is shown to the application you are joining, together with the address above.</small><script>` + previewScript + `</script></html>`
+var pageSource = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Join the room</title><style>body{font:18px system-ui;margin:3rem auto;padding:0 1rem;max-width:30rem;background:#f8fafc;color:#172033}input,button{box-sizing:border-box;width:100%;padding:.8rem;margin:.4rem 0 1rem;font:inherit}button{background:var(--accent,#1749a5);color:var(--on-accent,white);border:0;border-radius:.4rem}label{display:block}small{line-height:1.5}.scanned{background:#e8f0fe;border-radius:.4rem;padding:.6rem .8rem;margin:.4rem 0 1rem}.error{color:#b3261e;font-weight:600}input[aria-invalid=true]{border:2px solid #b3261e;background:#fff5f5}.issued{color:#64748b;font-size:.8em;line-height:1.45;margin:-.7rem 0 1.4rem}.issued .line{display:block;font-size:1.15em;margin-bottom:.35rem}.addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#475569;word-break:break-all}.picture{display:block;max-width:100%;max-height:7rem;margin:0 0 .4rem}.picture+h1{margin-top:.4em}.tagline{color:#475569;margin:-.35em 0 1.1em;font-size:.95em}.backdrop-image{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1}body.backdrop{margin:1.75rem auto}.backdrop main{background:#fff;border-radius:.9rem;padding:1.4rem 1.2rem 1.5rem;box-shadow:0 1px 2px rgba(0,0,0,.1),0 14px 34px rgba(0,0,0,.28)}.backdrop main>h1:first-child{margin-top:0}{{with .Look}}{{with .Accent}}:root{--accent:{{.}};--on-accent:{{$.Look.OnAccent}}}input:focus-visible,button:focus-visible{outline:3px solid {{.}};outline-offset:2px}{{end}}{{with .Background}}body{background:{{.}}}{{end}}{{end}}</style><body{{with .Look}}{{if .Backdrop}} class="backdrop"{{end}}{{end}}>{{with .Look}}{{with .BackgroundImage}}<img class="backdrop-image" src="{{.}}" alt="">{{end}}{{end}}<main>{{with .Look}}{{if .Picture}}<img class="picture" src="{{.Picture}}" alt="{{.PictureAlt}}">{{end}}{{end}}<h1>{{.Title}}</h1>{{with .Look}}{{with .Tagline}}<p class="tagline">{{.}}</p>{{end}}{{end}}<p>{{.Message}}</p>{{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}{{if .Form}}<form method="post" action="/join"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="handoff" value="{{.Handoff}}"><input type="hidden" name="return" value="{{.Return}}">{{if .Enrolled}}<p>You’re already enrolled as <strong>{{.EnrolledName}}</strong>. Continue with the same identity.</p><p class="issued"><span class="line">You are joining as <span class="addr">{{.EnrolledEmail}}</span></span>Room Pass built that address from your name, which is why there was nothing to fill in: it is never a real mailbox.{{with .AttributionNote}} {{.}}{{end}}</p>{{else}}{{if .Scanned}}<p class="scanned">Room code <strong>{{.Scanned}}</strong>, from the code you scanned. <input type="hidden" name="code" value="{{.Scanned}}"><input type="hidden" name="scanned" value="1"></p>{{else}}<label>Room code<input name="code" required maxlength="24" autocomplete="off" autocapitalize="characters" placeholder="BCDFGH" value="{{.Code}}"{{if .CodeInvalid}} aria-invalid="true"{{end}}{{if eq .Focus "code"}} autofocus{{end}}></label>{{end}}<label>Display name<input id="rp-name" name="name" required maxlength="64" autocomplete="nickname" value="{{.Name}}"{{if .NameInvalid}} aria-invalid="true"{{end}}{{if eq .Focus "name"}} autofocus{{end}}></label><p class="issued"><span class="line">You will appear as <output id="rp-display" for="rp-name"><strong>{{.Display}}</strong></output></span><span class="line">You will join as <output id="rp-email" for="rp-name" class="addr">{{.Email}}</output></span>Room Pass builds both from your name, so there is nothing to fill in: spaces and accents are folded, and the address is never a real mailbox.{{with .AttributionNote}} {{.}}{{end}}</p>{{end}}<button>Continue</button></form>{{end}}{{if .Enrolled}}<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Sign out of this browser</button></form>{{end}}<small>Your name is an unverified label, not a verified identity. It is shown to the application you are joining, together with the address above.</small></main><script>` + previewScript + `</script></html>`
 
 func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" && r.Method != "POST" {
@@ -742,7 +816,7 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 		// Email is what the script would compute for the name already in the
 		// box, so a browser with script disabled and a form that came back with
 		// a typed name both still show the address that is actually on offer.
-		_ = page.Execute(w, map[string]any{"Title": room.Spec.Title, "AttributionNote": room.Spec.AttributionNote, "Message": heading, "Form": form, "CSRF": csrf, "Handoff": handoff, "Return": dest, "Enrolled": enrolled, "EnrolledName": enrolledName, "EnrolledEmail": enrolledEmail, "Scanned": pill, "Code": code, "Error": failure, "Name": name, "Display": displayPreview(name), "Email": emailPreview(name), "Focus": focus, "CodeInvalid": field == "code", "NameInvalid": field == "name"})
+		_ = page.Execute(w, map[string]any{"Title": room.Spec.Title, "Look": lookOf(room), "AttributionNote": room.Spec.AttributionNote, "Message": heading, "Form": form, "CSRF": csrf, "Handoff": handoff, "Return": dest, "Enrolled": enrolled, "EnrolledName": enrolledName, "EnrolledEmail": enrolledEmail, "Scanned": pill, "Code": code, "Error": failure, "Name": name, "Display": displayPreview(name), "Email": emailPreview(name), "Focus": focus, "CodeInvalid": field == "code", "NameInvalid": field == "name"})
 	}
 	if r.Method == "GET" {
 		render(200, notice, "", "", "")

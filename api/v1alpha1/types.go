@@ -52,6 +52,17 @@ type RoomSpec struct {
 	// +kubebuilder:validation:Pattern="^[^<>\\x00-\\x1f\\x7f]*$"
 	// +optional
 	AttributionNote string `json:"attributionNote,omitempty"`
+	// Appearance dresses the join page for this event. Empty, the page looks
+	// as it always has.
+	//
+	// Pictures are paths on the join host, because the join page admits images
+	// from its own origin only. Serve them there without a login: participants
+	// have not signed in yet.
+	//
+	// Like any spec change, editing it starts a fresh join-code epoch, which
+	// invalidates the code on screen. Set it before the event.
+	// +optional
+	Appearance *RoomAppearance `json:"appearance,omitempty"`
 	// EndsAt can be extended without changing participant identities.
 	EndsAt metav1.Time `json:"endsAt"`
 	// +kubebuilder:default=Closed
@@ -79,6 +90,53 @@ type RoomSpec struct {
 	AllowedReturnURLs []string `json:"allowedReturnURLs"`
 	// +kubebuilder:default={rotateEvery:"15s",validFor:"30s",length:6}
 	JoinCode JoinCodeSpec `json:"joinCode"`
+}
+
+// RoomAppearance is display only. It never reaches the subject, the identity
+// headers or the groups, and it cannot reword what the join page says about
+// identity: the instructions, the issued address and the unverified-label
+// notice stay Room Pass's own.
+//
+// Paths are the only way in for a picture. The join page's CSP is img-src
+// 'self', so an absolute URL would be blocked in the browser anyway; the
+// pattern refuses it, and a "//host" path, at apply time instead. Colours and
+// paths land in CSS and URL contexts, so the patterns are deliberately narrow,
+// and internal/server checks them again before rendering.
+type RoomAppearance struct {
+	// Tagline is one line under the title: the event, the room, the time.
+	// +kubebuilder:validation:MaxLength=120
+	// +kubebuilder:validation:Pattern="^[^<>\\x00-\\x1f\\x7f]*$"
+	// +optional
+	Tagline string `json:"tagline,omitempty"`
+	// Picture is shown above the title, as a path on the join host such as
+	// /talks/my-talk/logo.png.
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern="^/[A-Za-z0-9._~%!$&+,;=:@?-][A-Za-z0-9._~%!$&+,;=:@/?-]*$"
+	// +optional
+	Picture string `json:"picture,omitempty"`
+	// PictureAlt is what a screen reader says for the picture. Empty marks it
+	// decorative.
+	// +kubebuilder:validation:MaxLength=120
+	// +kubebuilder:validation:Pattern="^[^<>\\x00-\\x1f\\x7f]*$"
+	// +optional
+	PictureAlt string `json:"pictureAlt,omitempty"`
+	// AccentColor fills the buttons and outlines focused fields, as #rrggbb.
+	// The button text is white or near-black, whichever contrasts more.
+	// +kubebuilder:validation:Pattern="^#[0-9a-fA-F]{6}$"
+	// +optional
+	AccentColor string `json:"accentColor,omitempty"`
+	// BackgroundColor is the page behind the form, as #rrggbb. Setting it, or
+	// BackgroundImage, puts the form on a white card so it stays readable.
+	// +kubebuilder:validation:Pattern="^#[0-9a-fA-F]{6}$"
+	// +optional
+	BackgroundColor string `json:"backgroundColor,omitempty"`
+	// BackgroundImage covers the page behind the form, as a path on the join
+	// host. BackgroundColor shows until it arrives. The whole room loads it at
+	// once over the venue's network, so keep it small.
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern="^/[A-Za-z0-9._~%!$&+,;=:@?-][A-Za-z0-9._~%!$&+,;=:@/?-]*$"
+	// +optional
+	BackgroundImage string `json:"backgroundImage,omitempty"`
 }
 
 type Code struct {
