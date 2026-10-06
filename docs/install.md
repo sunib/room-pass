@@ -102,8 +102,8 @@ rm hash-key block-key
 ```
 
 The client secret, shared by Dex and your application. Dex reads it only when
-its pod starts, so restart Dex after changing it (a restart costs participants one
-tap through sign-in; Dex keeps no state worth keeping):
+its pod starts, so restart Dex after changing it (a restart signs nobody out: Dex
+keeps its signing keys in Kubernetes):
 
 ```sh
 kubectl -n room-pass create secret generic dex-clients \
@@ -113,12 +113,21 @@ kubectl -n room-pass create secret generic dex-clients \
 ## 4. Apply
 
 CRDs first, and wait for them: a Room in the same apply as its CRD fails with
-"no matches for kind".
+"no matches for kind". Two sets: Room Pass's, and Dex's storage
+(`dex.coreos.com`), which Dex is configured not to create itself, so it runs
+with a Role in its own namespace instead of the right to create cluster-wide
+types. Without them Dex starts, and every login fails.
 
 ```sh
 kubectl apply -k https://github.com/sunib/room-pass//config/crd?ref=vX.Y.Z
+kubectl apply -k https://github.com/sunib/room-pass//deploy/dex-crds?ref=vX.Y.Z
 kubectl wait --for=condition=Established \
-  crd/rooms.room-pass.koudijs.dev crd/participants.room-pass.koudijs.dev
+  crd/rooms.room-pass.koudijs.dev crd/participants.room-pass.koudijs.dev \
+  crd/authcodes.dex.coreos.com crd/authrequests.dex.coreos.com \
+  crd/connectors.dex.coreos.com crd/devicerequests.dex.coreos.com \
+  crd/devicetokens.dex.coreos.com crd/oauth2clients.dex.coreos.com \
+  crd/offlinesessionses.dex.coreos.com crd/passwords.dex.coreos.com \
+  crd/refreshtokens.dex.coreos.com crd/signingkeies.dex.coreos.com
 kubectl apply -k path/to/your/overlay
 kubectl -n room-pass rollout status deployment/dex
 kubectl -n room-pass rollout status deployment/room-pass
@@ -126,6 +135,11 @@ kubectl -n room-pass rollout status deployment/room-pass
 
 Under Flux or Argo CD, put the CRDs in a separate Kustomization or Application
 that the rest depends on, and do the same for the Room.
+
+Dex's CRDs are cluster-scoped and shared by every Dex in the cluster that uses
+Kubernetes storage; each keeps its resources in its own namespace. If another
+Dex (or its chart) already owns them, leave them to it and skip `deploy/dex-crds`,
+as long as that Dex is the same release or close to it.
 
 ## 5. Create the Room
 
@@ -288,5 +302,6 @@ cookie keys); a major release says in the CHANGELOG what to do.
 | Dex stays in `CreateContainerConfigError` | The `dex-clients` Secret does not exist yet. |
 | `invalid client` at login | The client secret changed and Dex was not restarted, or the application holds a different value. |
 | Nobody can join | `endsAt` has passed, enrollment is Closed, or the Room is stopped: `kubectl -n room-pass get rooms.room-pass.koudijs.dev demo -o yaml`. |
-| Everyone had to tap through sign-in again, as the same name | Dex restarted. It keeps its state in memory, so its signing keys changed; nothing was lost. |
+| Dex logs `storage is not initialized, CRDs are not created` | Dex's CRDs are missing. Apply `deploy/dex-crds` and restart Dex. |
+| Dex logs `forbidden` for `dex.coreos.com` resources | Dex runs in a namespace other than its RoleBinding's, or without the `dex` ServiceAccount. |
 | Everyone was signed out and had to enroll again | The cookie Secret was replaced, or the Room was recreated. |

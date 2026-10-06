@@ -1,0 +1,40 @@
+# Dex's kubernetes storage (dex-config.yaml) keeps signing keys, pending logins
+# and codes as dex.coreos.com resources in Dex's own namespace. This Role is
+# all it needs for that: no ClusterRole, and no right to create CRDs, because
+# the config sets `crdHandling: check` and deploy/dex-crds installs them.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dex
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dex
+rules:
+  - apiGroups: [dex.coreos.com]
+    resources:
+      - authcodes
+      - authrequests
+      - connectors
+      - devicerequests
+      - devicetokens
+      - oauth2clients
+      - offlinesessionses
+      - passwords
+      - refreshtokens
+      - signingkeies
+    # Dex's client uses exactly these; it neither watches nor patches.
+    verbs: [get, list, create, update, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dex
+subjects:
+  - kind: ServiceAccount
+    name: dex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dex

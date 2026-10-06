@@ -128,8 +128,9 @@ and the components below from the first release after 2.0.0):
 | Component | What it is |
 |---|---|
 | [config/crd](config/crd) | the Room and Participant CRDs; apply first and wait for them to be Established |
+| [deploy/dex-crds](deploy/dex-crds) | Dex's own storage CRDs (`dex.coreos.com`), vendored at the Dex release `deploy/dex` runs; apply with `config/crd` |
 | [deploy/base](deploy/base) | Room Pass, its ServiceAccount and RBAC, with no hostnames |
-| [deploy/dex](deploy/dex) | Dex in memory, with no volume, and a NetworkPolicy admitting only Room Pass; its config is yours |
+| [deploy/dex](deploy/dex) | Dex with its state in Kubernetes and a namespaced Role for it, no volume, and a NetworkPolicy admitting only Room Pass; its config is yours |
 | [deploy/edge/traefik](deploy/edge/traefik) | the edge rate limit and identity-header stripping, as Traefik Middlewares |
 | [deploy/apiserver](deploy/apiserver/authentication-config.yaml) | the kube-apiserver's structured authentication config for the issuer |
 | [deploy/example](deploy/example) | all of the above for one event, with placeholder hosts, plus a Room |
@@ -155,9 +156,10 @@ Keep keys out of Git, logs and image layers. Back up the Secret together with Ro
 Participants using your Kubernetes/etcd backup process. A restart preserves enrollment;
 losing or replacing keys signs everyone out. Rotation with multiple verification keys is
 not implemented. The local fixture preserves these keys on repeated `e2e-up` runs.
-`deploy/dex` keeps Dex's state in memory: a Dex restart rotates its signing keys, so ID
-tokens issued before it stop verifying, and applications send participants back through
-a one-tap sign-in as the same identity. `e2e-up` restarts Room Pass to load source changes.
+`deploy/dex` keeps Dex's signing keys and logins in progress as `dex.coreos.com`
+resources in its namespace, so a Dex restart signs nobody out and needs no volume; back
+them up with the Room. Dex does not create those CRDs itself (`crdHandling: check`), so
+`deploy/dex-crds` goes in first. `e2e-up` restarts Room Pass to load source changes.
 
 Build Room Pass independently:
 

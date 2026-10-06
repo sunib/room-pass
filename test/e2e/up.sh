@@ -67,9 +67,13 @@ wait_established() {
   done
 }
 kubectl apply -k config/crd
+# Dex's storage CRDs, which Dex is configured not to create itself. Without
+# them Dex starts, but every login fails on its storage.
+kubectl apply -k deploy/dex-crds
 # A Room applied in the same breath as its new CRD fails with "no matches for
 # kind": the apiserver serves the type only once the CRD is Established.
 wait_established rooms.room-pass.koudijs.dev participants.room-pass.koudijs.dev
+wait_established $(kubectl kustomize deploy/dex-crds | sed -n 's/^  name: \(.*\.dex\.coreos\.com\)$/\1/p')
 # The overlay carries Traefik Middlewares, whose CRD k3s's Helm controller
 # installs asynchronously during bootstrap.
 wait_established middlewares.traefik.io
@@ -104,7 +108,7 @@ kubectl apply -f test/e2e/demo-rbac.yaml
 kubectl -n room-pass rollout restart deployment/room-pass
 kubectl -n room-pass rollout status deployment/room-pass --timeout=180s
 # Dex is not restarted: its config is a generated ConfigMap, so a change to it
-# rolls Dex by itself, and a needless restart would only rotate its keys.
+# rolls Dex by itself.
 kubectl -n room-pass rollout status deployment/dex --timeout=180s
 printf 'Cluster ready. Kubeconfig: %s/.local/kubeconfig\n' "$PWD"
 
