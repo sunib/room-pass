@@ -1,10 +1,14 @@
 # Dex's configuration: https://dexidp.io/docs/configuration/
 issuer: https://login.example.com
-# In memory: nothing to back up and no volume. A Dex restart costs a one-tap
-# sign-in (deploy/dex/deployment.yaml). To keep tokens valid across Dex
-# restarts instead, use `type: kubernetes` with Dex's CRDs installed.
+# In Kubernetes, as dex.coreos.com resources in Dex's namespace: signing keys
+# and logins in progress survive a Dex restart, with no volume to back up.
+# `check`: Dex does not create its CRDs (it has no right to); apply
+# deploy/dex-crds first. deploy/dex/rbac.yaml grants what this needs.
 storage:
-  type: memory
+  type: kubernetes
+  config:
+    inCluster: true
+    crdHandling: check
 web:
   http: 0.0.0.0:5556
 oauth2:

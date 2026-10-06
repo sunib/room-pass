@@ -14,6 +14,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -41,6 +42,7 @@ func TestDexNetworkBoundary(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	_ = networkingv1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
 	db, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		t.Fatal(err)
@@ -83,6 +85,32 @@ func TestDexNetworkBoundary(t *testing.T) {
 			continue
 		}
 		switch meta.Kind {
+		// Dex's storage credential (deploy/dex/rbac.yaml); run.sh installed
+		// its CRDs.
+		case "ServiceAccount":
+			sa := &corev1.ServiceAccount{}
+			if err := yaml.Unmarshal(obj.Raw, sa); err != nil {
+				t.Fatal(err)
+			}
+			sa.Namespace = "dex"
+			create(sa)
+		case "Role":
+			role := &rbacv1.Role{}
+			if err := yaml.Unmarshal(obj.Raw, role); err != nil {
+				t.Fatal(err)
+			}
+			role.Namespace = "dex"
+			create(role)
+		case "RoleBinding":
+			binding := &rbacv1.RoleBinding{}
+			if err := yaml.Unmarshal(obj.Raw, binding); err != nil {
+				t.Fatal(err)
+			}
+			binding.Namespace = "dex"
+			for i := range binding.Subjects {
+				binding.Subjects[i].Namespace = "dex"
+			}
+			create(binding)
 		case "ConfigMap":
 			cm := &corev1.ConfigMap{}
 			if err := yaml.Unmarshal(obj.Raw, cm); err != nil {

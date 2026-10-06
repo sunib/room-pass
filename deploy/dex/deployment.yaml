@@ -1,17 +1,15 @@
-# One replica, no disk. Dex keeps its state in memory (dex-config.yaml), and
-# for Room Pass that state is disposable: the participant's identity lives in
-# Room Pass's Participants and cookie, the subject is computed rather than
-# stored, and the authproxy connector issues no refresh tokens.
+# One replica, no disk. Dex keeps its state in Kubernetes (dex-config.yaml):
+# signing keys, pending logins and codes are dex.coreos.com resources in this
+# namespace, written through the ServiceAccount in rbac.yaml. So a Dex restart
+# keeps its keys, ID tokens issued before it go on verifying, and a login in
+# progress finishes on the new pod.
 #
-# What a restart costs: new signing keys, so ID tokens issued before it no
-# longer verify, and logins in progress start over. An application whose token
-# stops verifying (or that gets 401 from Kubernetes) sends the participant back
-# to sign in, and Room Pass recognises the enrolled browser: one tap, same
-# identity.
+# The CRDs come from deploy/dex-crds, applied first. Dex does not create them:
+# its config says `crdHandling: check`, and it has no right to.
 #
-# Exactly one replica, and Recreate: two Dex pods with in-memory storage are two
-# issuers with different keys, so a login that starts on one cannot finish on
-# the other, and a token one signs does not verify against the other's keys.
+# One replica, and Recreate. Two pods sharing this storage would be safe, but
+# the storage type is the overlay's choice: with `type: memory`, two pods are
+# two issuers with different keys.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,7 +26,10 @@ spec:
       labels:
         app: dex
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: dex
+      # The token is Dex's credential for its storage, and only that: the Role
+      # in rbac.yaml reaches nothing but dex.coreos.com in this namespace.
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         # The dex user in ghcr.io/dexidp/dex.
