@@ -59,7 +59,7 @@ func TestEnrollmentConcurrencyAndLifecycle(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			if _, e := s.enrollParticipant(context.Background(), "bcd-fgh", fmt.Sprintf("Ada %d", i), ""); e == nil {
+			if _, e := s.enrollParticipant(context.Background(), "bcd-fgh", fmt.Sprintf("Ada %d", i), "", ""); e == nil {
 				ok.Add(1)
 			}
 		}(i)
@@ -68,7 +68,7 @@ func TestEnrollmentConcurrencyAndLifecycle(t *testing.T) {
 	if ok.Load() != 100 {
 		t.Fatalf("shared-room burst: %d", ok.Load())
 	}
-	if _, e := s.enrollParticipant(context.Background(), "BCDFGH", "overflow", ""); e == nil {
+	if _, e := s.enrollParticipant(context.Background(), "BCDFGH", "overflow", "", ""); e == nil {
 		t.Fatal("cap bypassed")
 	}
 	ps := &api.ParticipantList{}
@@ -110,6 +110,7 @@ func TestEnrollmentConcurrencyAndLifecycle(t *testing.T) {
 
 type browser struct {
 	cookies map[string]map[string]*http.Cookie
+	ua      string
 }
 
 func (b *browser) request(s *Server, method, raw string, form url.Values) *httptest.ResponseRecorder {
@@ -125,6 +126,9 @@ func (b *browser) request(s *Server, method, raw string, form url.Values) *httpt
 	}
 	r.Header.Set("X-Remote-User", "forged")
 	r.Header.Set("X-Remote-Group", "system:masters")
+	if b.ua != "" {
+		r.Header.Set("User-Agent", b.ua)
+	}
 	for _, c := range b.cookies[u.Host] {
 		r.AddCookie(c)
 	}
@@ -155,7 +159,7 @@ func hidden(body, name string) string {
 // looking at the presenter's screen again.
 func TestARejectedJoinKeepsWhatWasTyped(t *testing.T) {
 	s, _ := fixture(t, "http://dex.test")
-	if _, e := s.enrollParticipant(context.Background(), "BCDFGH", "Ada", ""); e != nil {
+	if _, e := s.enrollParticipant(context.Background(), "BCDFGH", "Ada", "", ""); e != nil {
 		t.Fatal(e)
 	}
 	submit := func(b *browser, form url.Values) *httptest.ResponseRecorder {
@@ -349,7 +353,7 @@ func TestStolenCrossHostLinkCannotEnroll(t *testing.T) {
 func TestCurrentRoomStateAndCookieTampering(t *testing.T) {
 	s, db := fixture(t, "http://dex.test")
 	ctx := context.Background()
-	ss, e := s.enrollParticipant(ctx, "BCDFGH", "Ada", "")
+	ss, e := s.enrollParticipant(ctx, "BCDFGH", "Ada", "", "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -488,7 +492,7 @@ func TestIdentityRequiresCurrentEnrollment(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, db := fixture(t, "http://dex.test")
 			ctx := context.Background()
-			ss, err := s.enrollParticipant(ctx, "BCDFGH", "Ada", "")
+			ss, err := s.enrollParticipant(ctx, "BCDFGH", "Ada", "", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -674,7 +678,7 @@ func TestScannedCodeIsAPrefillAndNothingMore(t *testing.T) {
 		// That has to be worth nothing: the POST re-checks the value against
 		// the Room's valid codes, so a made-up one fails exactly as a typed
 		// made-up one fails.
-		if _, err := s.enrollParticipant(context.Background(), "ZZZZZZ", "Mallory", ""); err == nil {
+		if _, err := s.enrollParticipant(context.Background(), "ZZZZZZ", "Mallory", "", ""); err == nil {
 			t.Fatal("a code that the Room never issued was accepted")
 		}
 	})
@@ -871,14 +875,14 @@ func TestNamesWithoutUsableCharactersAreRefused(t *testing.T) {
 // quietly seated at the first person's Participant with their own cookie.
 func TestASecondClaimOnANameIsRefused(t *testing.T) {
 	s, db := fixture(t, "http://dex.test")
-	first, e := s.enrollParticipant(context.Background(), "BCDFGH", "Ada Demo", "")
+	first, e := s.enrollParticipant(context.Background(), "BCDFGH", "Ada Demo", "", "")
 	if e != nil {
 		t.Fatal(e)
 	}
 	if first.Name != "p-ada-demo" {
 		t.Fatalf("participant object name: %q", first.Name)
 	}
-	if _, e = s.enrollParticipant(context.Background(), "BCDFGH", "ada  demo", ""); !errors.Is(e, errNameTaken) {
+	if _, e = s.enrollParticipant(context.Background(), "BCDFGH", "ada  demo", "", ""); !errors.Is(e, errNameTaken) {
 		t.Fatalf("a colliding name enrolled anyway: %v", e)
 	}
 	ps := &api.ParticipantList{}
@@ -886,7 +890,7 @@ func TestASecondClaimOnANameIsRefused(t *testing.T) {
 	if len(ps.Items) != 1 {
 		t.Fatalf("participants after the refused claim: %d", len(ps.Items))
 	}
-	if _, e = s.enrollParticipant(context.Background(), "BCDFGH", "Ada Demo 2", ""); e != nil {
+	if _, e = s.enrollParticipant(context.Background(), "BCDFGH", "Ada Demo 2", "", ""); e != nil {
 		t.Fatal(e)
 	}
 }
@@ -1414,5 +1418,125 @@ func TestGroupPatternIsTheCRDs(t *testing.T) {
 		if n := strings.Count(string(crd), "pattern: "+demoGroup.String()+"\n"); n != want {
 			t.Errorf("the %s CRD carries %s %d times, want %d", file, demoGroup, n, want)
 		}
+	}
+}
+
+const (
+	iPhoneSafari  = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+	androidChrome = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
+)
+
+// Real User-Agents from the phones and laptops an audience brings. Order is
+// what this tests: almost everything claims Safari, every Chromium browser
+// claims Chrome, iOS claims to be like Mac OS X and Android claims Linux.
+func TestDeviceOfNamesBrowsersFromAFixedList(t *testing.T) {
+	for ua, want := range map[string]device{
+		iPhoneSafari:  {"safari", "ios"},
+		androidChrome: {"chrome", "android"},
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.6723.90 Mobile/15E148 Safari/604.1":                  {"chrome", "ios"},
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/131.0 Mobile/15E148 Safari/605.1.15":                       {"firefox", "ios"},
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 EdgiOS/130.0.2849.80 Mobile/15E148 Safari/605.1.15": {"edge", "ios"},
+		"Mozilla/5.0 (iPad; CPU OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1":                                  {"safari", "ios"},
+		"Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36":              {"samsung", "android"},
+		"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0":                                  {"edge", "android"},
+		"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 OPR/85.0.0.0":                                    {"opera", "android"},
+		"Mozilla/5.0 (Android 15; Mobile; rv:131.0) Gecko/131.0 Firefox/131.0":                                                                                            {"firefox", "android"},
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15":                                           {"safari", "macos"},
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36":                                           {"chrome", "macos"},
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0":                                   {"edge", "windows"},
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0":                                                                                {"firefox", "windows"},
+		"Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36":                                                  {"chrome", "chromeos"},
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/130.0.0.0 Safari/537.36":                                                   {"chrome", "linux"},
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 350.0.0.0":                               {"other", "ios"},
+		"curl/8.5.0":                     {"other", "other"},
+		"":                               {"other", "other"},
+		"demo:a,system:masters <script>": {"other", "other"},
+	} {
+		if got := deviceOf(ua); got != want {
+			t.Errorf("deviceOf(%q) = %+v, want %+v", ua, got, want)
+		}
+		if _, ok := browserNames[want.Browser]; !ok {
+			t.Errorf("%q has no name on the join page", want.Browser)
+		}
+		if _, ok := platformNames[want.Platform]; !ok {
+			t.Errorf("%q has no name on the join page", want.Platform)
+		}
+	}
+}
+
+// The browser groups join the answer's, all of them kept on the Participant
+// and sent at sign-in, and the page says beforehand what will be shared.
+func TestBrowserGroupsJoinTheAnswer(t *testing.T) {
+	upstream, group := dexRecorder(t)
+	s, db := fixture(t, upstream)
+	setQuestion(t, s, db, frameworks())
+	room := &api.Room{}
+	if e := db.Get(context.Background(), s.cfg.Room, room); e != nil {
+		t.Fatal(e)
+	}
+	room.Spec.BrowserGroups = &api.BrowserGroups{Prefix: "demo:"}
+	if e := db.Update(context.Background(), room); e != nil {
+		t.Fatal(e)
+	}
+	b := newBrowser()
+	b.ua = iPhoneSafari
+	page := joinPage(t, s, b)
+	if !strings.Contains(page, "together with the address above and your browser, Safari on iOS.</small>") {
+		t.Errorf("the page does not say the browser is shared: %s", page)
+	}
+	w := submit(s, b, page, url.Values{"code": {"BCDFGH"}, "name": {"Ada"}, "answer": {"demo:framework-svelte"}})
+	if w.Code != 303 {
+		t.Fatalf("join: %d %s", w.Code, w.Body.String())
+	}
+	ps := participantsOf(t, db)
+	if len(ps) != 1 || strings.Join(ps[0].Spec.Groups, " ") != "demo:framework-svelte demo:browser-safari demo:platform-ios" {
+		t.Fatalf("Participant groups: %+v", ps)
+	}
+	if w = b.request(s, "GET", w.Header().Get("Location"), nil); w.Code != 204 {
+		t.Fatalf("complete: %d %s", w.Code, w.Body.String())
+	}
+	if got := group(); got != "demo:test,demo:framework-svelte,demo:browser-safari,demo:platform-ios" {
+		t.Errorf("X-Remote-Group = %q", got)
+	}
+}
+
+// Without browserGroups a Room learns nothing from the User-Agent, and its
+// page says nothing about one.
+func TestARoomWithoutBrowserGroupsIgnoresTheBrowser(t *testing.T) {
+	upstream, group := dexRecorder(t)
+	s, db := fixture(t, upstream)
+	b := newBrowser()
+	b.ua = iPhoneSafari
+	page := joinPage(t, s, b)
+	if strings.Contains(page, "your browser") || strings.Contains(page, "Safari") {
+		t.Errorf("the page mentions the browser: %s", page)
+	}
+	w := submit(s, b, page, url.Values{"code": {"BCDFGH"}, "name": {"Ada"}})
+	if w.Code != 303 {
+		t.Fatalf("join: %d %s", w.Code, w.Body.String())
+	}
+	if w = b.request(s, "GET", w.Header().Get("Location"), nil); w.Code != 204 {
+		t.Fatalf("complete: %d %s", w.Code, w.Body.String())
+	}
+	if ps := participantsOf(t, db); len(ps) != 1 || ps[0].Spec.Groups != nil {
+		t.Errorf("groups stored without browserGroups: %+v", ps)
+	}
+	if got := group(); got != "demo:test" {
+		t.Errorf("X-Remote-Group = %q", got)
+	}
+}
+
+// The CRD refuses these prefixes. A Room that holds one anyway gets names
+// that fail the group pattern, and none is stored.
+func TestABrowserGroupPrefixThatEscapedTheSchemaAddsNothing(t *testing.T) {
+	for _, prefix := range []string{"system:", "demo:a,system:masters:", "", "demo:" + strings.Repeat("x", 120)} {
+		room := &api.Room{Spec: api.RoomSpec{BrowserGroups: &api.BrowserGroups{Prefix: prefix}}}
+		if got := browserGroups(room, iPhoneSafari); got != nil {
+			t.Errorf("prefix %q: %v", prefix, got)
+		}
+	}
+	room := &api.Room{Spec: api.RoomSpec{BrowserGroups: &api.BrowserGroups{Prefix: "demo:my-talk:"}}}
+	if got := strings.Join(browserGroups(room, androidChrome), " "); got != "demo:my-talk:browser-chrome demo:my-talk:platform-android" {
+		t.Errorf("browserGroups = %q", got)
 	}
 }
