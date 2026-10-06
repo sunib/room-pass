@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.0](https://github.com/sunib/room-pass/compare/v2.1.0...v2.2.0) (2026-10-06)
+
+
+### Features
+
+* a Room can ask one question at the door, and the answer becomes a group ([#27](https://github.com/sunib/room-pass/issues/27)) ([61c77f4](https://github.com/sunib/room-pass/commit/61c77f49dcd5097077aa7963622a3cc1cac50526))
+* a Room can put the browser and platform a participant joined with in their groups ([#28](https://github.com/sunib/room-pass/issues/28)) ([622d87c](https://github.com/sunib/room-pass/commit/622d87cd7b17c872e8ae43bc1ca50065836303aa))
+
 ## [2.1.0](https://github.com/sunib/room-pass/compare/v2.0.0...v2.1.0) (2026-10-06)
 
 
