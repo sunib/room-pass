@@ -23,6 +23,16 @@ spec:
   #   accentColor: "#f2a541"
   #   backgroundColor: "#0f3d3e"
   #   backgroundImage: /talks/my-talk/stage.jpg
+  # Optional: one question everyone answers when joining. The answer's group
+  # joins audienceGroup in their token. Participants choose it, so it carries
+  # no more weight than their name. Set it before the event too.
+  # question:
+  #   prompt: Your favourite frontend framework?
+  #   answers:
+  #     - label: React
+  #       group: demo:framework-react
+  #     - label: Svelte
+  #       group: demo:framework-svelte
   # Nobody can join after this. Move it before every event.
   endsAt: "2026-12-31T18:00:00Z"
   enrollment: Open

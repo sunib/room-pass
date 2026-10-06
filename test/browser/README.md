@@ -8,7 +8,8 @@ task browser
 This runs real Chromium through Traefik, Room Pass, Dex and the local OIDC demo
 client. The tests cover new enrollment, returning enrollment with the same
 Participant UID, invalid codes, tampered CSRF forms, secure enrollment-cookie flags, closed enrollment,
-and a dressed Room whose pictures load from the join host under its CSP. A phone-sized viewport
+a dressed Room whose pictures load from the join host under its CSP, and a Room's
+question whose answer arrives in the token's groups and is accepted by Kubernetes. A phone-sized viewport
 exercises the room form without mocking browser headers or the login protocol.
 
 The test runner reads only `.local/kubeconfig`, never the current user

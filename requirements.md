@@ -92,6 +92,7 @@ spec:
 | `title` | Required, nonempty, bounded display text |
 | `attributionNote` | Optional, bounded text shown beside the issued address. The operator's sentence about what the application does with it; Room Pass only guarantees the address is unroutable |
 | `appearance` | Optional, mutable, display only: a tagline, a picture and its alt text, an accent colour, a background colour and a background image. Pictures are same-origin paths on the join host; colours are `#rrggbb`. It cannot reword the page's statements about identity |
+| `question` | Optional, mutable: a prompt and 2–8 answers, each a label and a group under `audienceGroup`'s rules. Every joining participant picks one; its group is stored on the Participant and asserted beside `audienceGroup`. Self-selected, so never stronger than the display name. Without it, nobody is asked and no group is added |
 | `endsAt` | Required timestamp, editable by operators to accommodate schedule changes; shortening ends access sooner and extending can reopen an expired, non-stopped Room |
 | `enrollment` | `Open` or `Closed`; defaults to `Closed` |
 | `stopped` | Defaults to false; transition to true is irreversible for this object |
@@ -191,6 +192,7 @@ spec:
     name: configbutler-demo
     uid: <actual-room-uid>
   displayName: Ramon
+  groups: [demo:framework-svelte]   # only when the Room asks a question
   revoked: false
 ```
 
@@ -199,8 +201,10 @@ a prefix plus the display name folded to a Kubernetes-safe identifier, so the id
 is guessable by design; its Kubernetes UID, not its name, binds the browser cookie to
 that exact enrollment. Room reference and display name are immutable; eligibility follows
 the Room’s current `endsAt`, so extending a talk does not require rewriting Participants. Revocation
-is irreversible for the object. Derive the author email and group from server-owned
-identity/Room data rather than accepting them in a participant payload. Audience users
+is irreversible for the object. Derive the author email and groups from server-owned
+identity/Room data rather than accepting them in a participant payload: an answer is
+accepted only as one of the Room's own, and its group is copied from the Room. `groups`
+is mutable, so an operator can move a participant; the next sign-in carries the change. Audience users
 cannot directly create, read, patch or list Participants through Kubernetes.
 
 A signed/encrypted HttpOnly cookie references the Room and Participant UIDs and expiry.
@@ -255,7 +259,7 @@ The room code proves possession, not physical attendance or one-person-one-vote.
 | Participant ID | Derived by the server from the display name, unique within the event and immutable once enrolled; public, never a credential |
 | Display name | Participant-supplied, validated and escaped; never used as an authorization key |
 | Author email | Server-generated `<participant-id>@koudijs.dev.test`; never supplied by the participant, and shown on the join page while the name is typed |
-| Group | Taken from event configuration, never from client input |
+| Groups | `audienceGroup`, plus the group of the participant's answer when the Room asks a question. Both come from event configuration: a participant chooses among the Room's answers and never names a group |
 | Session | Signed/encrypted cookie referencing persisted Room and Participant UIDs; no separate Session CRD |
 
 Validate display names using the existing Git-safe rules where suitable: reject control

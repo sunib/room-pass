@@ -193,6 +193,47 @@ The instructions, the issued address and the notice that a name is an
 unverified label stay as Room Pass writes them; `attributionNote` remains the
 one sentence an operator adds about identity.
 
+### Ask one question at the door (optional)
+
+`spec.question` asks everyone who joins to pick one answer, and puts that
+answer's group in their token beside `audienceGroup`. Bind a permission to one
+answer's group and only part of the room has it, until you bind it to
+`audienceGroup` as well.
+
+```yaml
+spec:
+  audienceGroup: demo:my-talk
+  question:
+    prompt: Your favourite frontend framework?
+    answers:                          # 2 to 8, shown in this order
+      - label: React
+        group: demo:framework-react
+      - label: Vue
+        group: demo:framework-vue
+      - label: Angular
+        group: demo:framework-angular
+      - label: Svelte
+        group: demo:framework-svelte
+```
+
+Somebody who picks Svelte signs in with the groups `demo:my-talk` and
+`demo:framework-svelte`.
+
+- **An answer is the participant's word.** Anyone can pick Svelte, so give an
+  answer's group only what anyone in the room could be allowed to have. Ask
+  nothing personal: the group travels in the token, into audit events and into
+  anything that mirrors them.
+- **Answer groups follow `audienceGroup`'s rules**: `demo:`, then letters,
+  digits, `:`, `_` and `-`. The apiserver's containment rule (step 7) already
+  admits them, so its configuration does not change. Room Pass sends Dex the
+  groups comma-separated, the authproxy connector's default
+  `groupHeaderSeparator`; leave that unset.
+- **The answer is kept on the Participant**, in `spec.groups`, and sent at every
+  sign-in. Nobody is asked twice. To move someone, edit their `spec.groups`:
+  their next sign-in carries it, while a token already issued keeps its groups.
+- **Set it before you go on stage.** Editing it starts a fresh code epoch, and
+  anyone who joined before the question existed is not asked it.
+
 ## 6. Connect your application
 
 Your application is an OIDC client of the issuer:

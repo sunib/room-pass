@@ -29,7 +29,9 @@ connectors:
   # The only connector Room Pass works with. Its id is part of the identity
   # contract: it sets the callback path (/callback/room-pass), Room Pass's
   # CONNECTOR_ID default, and the connector the apiserver configuration
-  # contains. The header names are the ones Room Pass sends.
+  # contains. The header names are the ones Room Pass sends. It sends a Room's
+  # audienceGroup and the group of a participant's answer comma-separated, the
+  # default groupHeaderSeparator: leave that unset.
   - type: authproxy
     id: room-pass
     name: Join the room

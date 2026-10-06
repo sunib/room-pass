@@ -618,6 +618,81 @@ func lookOf(room *api.Room) *look {
 	return l
 }
 
+// demoGroup is audienceGroup's pattern, and so the pattern of every group a
+// Room offers as an answer and a Participant keeps. TestGroupPatternIsTheCRDs
+// keeps them equal.
+var demoGroup = regexp.MustCompile(`^demo:[a-zA-Z0-9][a-zA-Z0-9:_-]*$`)
+
+const maxGroupLength = 128
+
+func validGroup(g string) bool { return len(g) <= maxGroupLength && demoGroup.MatchString(g) }
+
+// questionOf is the question the join page asks, or nil when the Room asks
+// none. An answer whose group escaped the schema is not offered, and a question
+// left with fewer than two answers is not asked: nobody can be held at the door
+// by a question they cannot answer.
+func questionOf(room *api.Room) *api.RoomQuestion {
+	q := room.Spec.Question
+	if q == nil {
+		return nil
+	}
+	asked := &api.RoomQuestion{Prompt: q.Prompt}
+	for _, a := range q.Answers {
+		if validGroup(a.Group) {
+			asked.Answers = append(asked.Answers, a)
+		}
+	}
+	if len(asked.Answers) < 2 {
+		return nil
+	}
+	return asked
+}
+
+// answerGroups is what enrollment stores for the answer a form carried. A Room
+// that asks nothing ignores the field, so a forged one cannot add a group the
+// Room never offered; a Room that asks takes only one of its own answers.
+func answerGroups(room *api.Room, answer string) ([]string, error) {
+	q := questionOf(room)
+	if q == nil {
+		return nil, nil
+	}
+	for _, a := range q.Answers {
+		if a.Group == answer {
+			return []string{a.Group}, nil
+		}
+	}
+	return nil, errBadAnswer
+}
+
+// answerLabel is what a returning participant picked, in the Room's words, or
+// "" when the Room asks nothing they answered.
+func answerLabel(room *api.Room, p *api.Participant) string {
+	if q := questionOf(room); q != nil {
+		for _, a := range q.Answers {
+			if contains(p.Spec.Groups, a.Group) {
+				return a.Label
+			}
+		}
+	}
+	return ""
+}
+
+// groupHeader is the X-Remote-Group value: the Room's audience group, then the
+// Participant's own. Dex's authproxy connector splits it on commas (its
+// groupHeaderSeparator default), and no group the pattern admits holds one, so
+// a stored group cannot smuggle in a second. One that escaped the schema is
+// left out rather than sent. A Participant without groups sends exactly what
+// every sign-in sent before Rooms could ask a question.
+func groupHeader(room *api.Room, p *api.Participant) string {
+	groups := []string{room.Spec.AudienceGroup}
+	for _, g := range p.Spec.Groups {
+		if validGroup(g) && !contains(groups, g) {
+			groups = append(groups, g)
+		}
+	}
+	return strings.Join(groups, ",")
+}
+
 const nearBlack = "#111827"
 
 // onAccent is the text colour for a button filled with accent: white or
@@ -665,7 +740,7 @@ var previewScriptSource = func() string {
 	return "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
 }()
 
-var pageSource = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Join the room</title><style>body{font:18px system-ui;margin:3rem auto;padding:0 1rem;max-width:30rem;background:#f8fafc;color:#172033}input,button{box-sizing:border-box;width:100%;padding:.8rem;margin:.4rem 0 1rem;font:inherit}button{background:var(--accent,#1749a5);color:var(--on-accent,white);border:0;border-radius:.4rem}label{display:block}small{line-height:1.5}.scanned{background:#e8f0fe;border-radius:.4rem;padding:.6rem .8rem;margin:.4rem 0 1rem}.error{color:#b3261e;font-weight:600}input[aria-invalid=true]{border:2px solid #b3261e;background:#fff5f5}.issued{color:#64748b;font-size:.8em;line-height:1.45;margin:-.7rem 0 1.4rem}.issued .line{display:block;font-size:1.15em;margin-bottom:.35rem}.addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#475569;word-break:break-all}.picture{display:block;max-width:100%;max-height:7rem;margin:0 0 .4rem}.picture+h1{margin-top:.4em}.tagline{color:#475569;margin:-.35em 0 1.1em;font-size:.95em}.backdrop-image{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1}body.backdrop{margin:1.75rem auto}.backdrop main{background:#fff;border-radius:.9rem;padding:1.4rem 1.2rem 1.5rem;box-shadow:0 1px 2px rgba(0,0,0,.1),0 14px 34px rgba(0,0,0,.28)}.backdrop main>h1:first-child{margin-top:0}{{with .Look}}{{with .Accent}}:root{--accent:{{.}};--on-accent:{{$.Look.OnAccent}}}input:focus-visible,button:focus-visible{outline:3px solid {{.}};outline-offset:2px}{{end}}{{with .Background}}body{background:{{.}}}{{end}}{{end}}</style><body{{with .Look}}{{if .Backdrop}} class="backdrop"{{end}}{{end}}>{{with .Look}}{{with .BackgroundImage}}<img class="backdrop-image" src="{{.}}" alt="">{{end}}{{end}}<main>{{with .Look}}{{if .Picture}}<img class="picture" src="{{.Picture}}" alt="{{.PictureAlt}}">{{end}}{{end}}<h1>{{.Title}}</h1>{{with .Look}}{{with .Tagline}}<p class="tagline">{{.}}</p>{{end}}{{end}}<p>{{.Message}}</p>{{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}{{if .Form}}<form method="post" action="/join"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="handoff" value="{{.Handoff}}"><input type="hidden" name="return" value="{{.Return}}">{{if .Enrolled}}<p>You’re already enrolled as <strong>{{.EnrolledName}}</strong>. Continue with the same identity.</p><p class="issued"><span class="line">You are joining as <span class="addr">{{.EnrolledEmail}}</span></span>Room Pass built that address from your name, which is why there was nothing to fill in: it is never a real mailbox.{{with .AttributionNote}} {{.}}{{end}}</p>{{else}}{{if .Scanned}}<p class="scanned">Room code <strong>{{.Scanned}}</strong>, from the code you scanned. <input type="hidden" name="code" value="{{.Scanned}}"><input type="hidden" name="scanned" value="1"></p>{{else}}<label>Room code<input name="code" required maxlength="24" autocomplete="off" autocapitalize="characters" placeholder="BCDFGH" value="{{.Code}}"{{if .CodeInvalid}} aria-invalid="true"{{end}}{{if eq .Focus "code"}} autofocus{{end}}></label>{{end}}<label>Display name<input id="rp-name" name="name" required maxlength="64" autocomplete="nickname" value="{{.Name}}"{{if .NameInvalid}} aria-invalid="true"{{end}}{{if eq .Focus "name"}} autofocus{{end}}></label><p class="issued"><span class="line">You will appear as <output id="rp-display" for="rp-name"><strong>{{.Display}}</strong></output></span><span class="line">You will join as <output id="rp-email" for="rp-name" class="addr">{{.Email}}</output></span>Room Pass builds both from your name, so there is nothing to fill in: spaces and accents are folded, and the address is never a real mailbox.{{with .AttributionNote}} {{.}}{{end}}</p>{{end}}<button>Continue</button></form>{{end}}{{if .Enrolled}}<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Sign out of this browser</button></form>{{end}}<small>Your name is an unverified label, not a verified identity. It is shown to the application you are joining, together with the address above.</small></main><script>` + previewScript + `</script></html>`
+var pageSource = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Join the room</title><style>body{font:18px system-ui;margin:3rem auto;padding:0 1rem;max-width:30rem;background:#f8fafc;color:#172033}input,button{box-sizing:border-box;width:100%;padding:.8rem;margin:.4rem 0 1rem;font:inherit}button{background:var(--accent,#1749a5);color:var(--on-accent,white);border:0;border-radius:.4rem}label{display:block}small{line-height:1.5}.scanned{background:#e8f0fe;border-radius:.4rem;padding:.6rem .8rem;margin:.4rem 0 1rem}.error{color:#b3261e;font-weight:600}input[aria-invalid=true]{border:2px solid #b3261e;background:#fff5f5}.issued{color:#64748b;font-size:.8em;line-height:1.45;margin:-.7rem 0 1.4rem}.issued .line{display:block;font-size:1.15em;margin-bottom:.35rem}.addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#475569;word-break:break-all}.picture{display:block;max-width:100%;max-height:7rem;margin:0 0 .4rem}.picture+h1{margin-top:.4em}.tagline{color:#475569;margin:-.35em 0 1.1em;font-size:.95em}.backdrop-image{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1}body.backdrop{margin:1.75rem auto}.backdrop main{background:#fff;border-radius:.9rem;padding:1.4rem 1.2rem 1.5rem;box-shadow:0 1px 2px rgba(0,0,0,.1),0 14px 34px rgba(0,0,0,.28)}.backdrop main>h1:first-child{margin-top:0}fieldset{border:0;margin:0 0 1rem;padding:0;min-width:0}legend{padding:0}.answer{display:flex;align-items:center;gap:.75rem;margin:.4rem 0;padding:.7rem .8rem;border:1px solid #cbd5e1;border-radius:.4rem;background:#fff}.answer input{flex:none;width:1.25rem;height:1.25rem;margin:0;padding:0;accent-color:var(--accent,#1749a5)}.answer:has(input:checked){border-color:var(--accent,#1749a5);box-shadow:inset 0 0 0 1px var(--accent,#1749a5)}.question.invalid .answer{border-color:#b3261e}{{with .Look}}{{with .Accent}}:root{--accent:{{.}};--on-accent:{{$.Look.OnAccent}}}input:focus-visible,button:focus-visible{outline:3px solid {{.}};outline-offset:2px}{{end}}{{with .Background}}body{background:{{.}}}{{end}}{{end}}</style><body{{with .Look}}{{if .Backdrop}} class="backdrop"{{end}}{{end}}>{{with .Look}}{{with .BackgroundImage}}<img class="backdrop-image" src="{{.}}" alt="">{{end}}{{end}}<main>{{with .Look}}{{if .Picture}}<img class="picture" src="{{.Picture}}" alt="{{.PictureAlt}}">{{end}}{{end}}<h1>{{.Title}}</h1>{{with .Look}}{{with .Tagline}}<p class="tagline">{{.}}</p>{{end}}{{end}}<p>{{.Message}}</p>{{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}{{if .Form}}<form method="post" action="/join"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="handoff" value="{{.Handoff}}"><input type="hidden" name="return" value="{{.Return}}">{{if .Enrolled}}<p>You’re already enrolled as <strong>{{.EnrolledName}}</strong>{{with .EnrolledAnswer}}, and you picked <strong>{{.}}</strong>{{end}}. Continue with the same identity.</p><p class="issued"><span class="line">You are joining as <span class="addr">{{.EnrolledEmail}}</span></span>Room Pass built that address from your name, which is why there was nothing to fill in: it is never a real mailbox.{{with .AttributionNote}} {{.}}{{end}}</p>{{else}}{{if .Scanned}}<p class="scanned">Room code <strong>{{.Scanned}}</strong>, from the code you scanned. <input type="hidden" name="code" value="{{.Scanned}}"><input type="hidden" name="scanned" value="1"></p>{{else}}<label>Room code<input name="code" required maxlength="24" autocomplete="off" autocapitalize="characters" placeholder="BCDFGH" value="{{.Code}}"{{if .CodeInvalid}} aria-invalid="true"{{end}}{{if eq .Focus "code"}} autofocus{{end}}></label>{{end}}<label>Display name<input id="rp-name" name="name" required maxlength="64" autocomplete="nickname" value="{{.Name}}"{{if .NameInvalid}} aria-invalid="true"{{end}}{{if eq .Focus "name"}} autofocus{{end}}></label><p class="issued"><span class="line">You will appear as <output id="rp-display" for="rp-name"><strong>{{.Display}}</strong></output></span><span class="line">You will join as <output id="rp-email" for="rp-name" class="addr">{{.Email}}</output></span>Room Pass builds both from your name, so there is nothing to fill in: spaces and accents are folded, and the address is never a real mailbox.{{with .AttributionNote}} {{.}}{{end}}</p>{{with .Question}}<fieldset class="question{{if $.AnswerInvalid}} invalid{{end}}"><legend>{{.Prompt}}</legend>{{range $i, $a := .Answers}}<label class="answer"><input type="radio" name="answer" value="{{$a.Group}}" required{{if eq $a.Group $.Answer}} checked{{end}}{{if and (eq $i 0) (eq $.Focus "answer")}} autofocus{{end}}>{{$a.Label}}</label>{{end}}</fieldset>{{end}}{{end}}<button>Continue</button></form>{{end}}{{if .Enrolled}}<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Sign out of this browser</button></form>{{end}}<small>{{if .Question}}Your name and your answer are unverified labels, not a verified identity. Both are shown to the application you are joining, together with the address above.{{else}}Your name is an unverified label, not a verified identity. It is shown to the application you are joining, together with the address above.{{end}}</small></main><script>` + previewScript + `</script></html>`
 
 func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" && r.Method != "POST" {
@@ -733,15 +808,20 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	// enrolled. Someone returning to this page has no other way to see which
 	// identity they are about to continue as -- and the name is the identity
 	// here, so it is the one thing worth showing.
-	enrolledName, enrolledEmail := "", ""
+	enrolledName, enrolledEmail, enrolledAnswer := "", "", ""
 	if enrolled {
 		_, p, e := s.identity(r.Context(), ss)
 		enrolled = e == nil
 		if enrolled {
 			enrolledName = p.Spec.DisplayName
 			enrolledEmail = participantEmail(p)
+			enrolledAnswer = answerLabel(room, p)
 		}
 	}
+	// The answer a form came back with, so a refused join keeps it picked. It
+	// only ever selects one of the Room's own answers on the page; nothing
+	// renders it.
+	answer := r.FormValue("answer")
 	// A code carried here by a scanned QR code. Only ever a prefill: the POST
 	// below re-reads it from the form and Room Pass checks it against the
 	// Room's rotating status exactly as it checks a typed one.
@@ -816,7 +896,7 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 		// Email is what the script would compute for the name already in the
 		// box, so a browser with script disabled and a form that came back with
 		// a typed name both still show the address that is actually on offer.
-		_ = page.Execute(w, map[string]any{"Title": room.Spec.Title, "Look": lookOf(room), "AttributionNote": room.Spec.AttributionNote, "Message": heading, "Form": form, "CSRF": csrf, "Handoff": handoff, "Return": dest, "Enrolled": enrolled, "EnrolledName": enrolledName, "EnrolledEmail": enrolledEmail, "Scanned": pill, "Code": code, "Error": failure, "Name": name, "Display": displayPreview(name), "Email": emailPreview(name), "Focus": focus, "CodeInvalid": field == "code", "NameInvalid": field == "name"})
+		_ = page.Execute(w, map[string]any{"Title": room.Spec.Title, "Look": lookOf(room), "AttributionNote": room.Spec.AttributionNote, "Message": heading, "Form": form, "CSRF": csrf, "Handoff": handoff, "Return": dest, "Enrolled": enrolled, "EnrolledName": enrolledName, "EnrolledEmail": enrolledEmail, "EnrolledAnswer": enrolledAnswer, "Scanned": pill, "Code": code, "Error": failure, "Name": name, "Display": displayPreview(name), "Email": emailPreview(name), "Question": questionOf(room), "Answer": answer, "Focus": focus, "CodeInvalid": field == "code", "NameInvalid": field == "name", "AnswerInvalid": field == "answer"})
 	}
 	if r.Method == "GET" {
 		render(200, notice, "", "", "")
@@ -856,7 +936,7 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 			render(400, e.Error(), "name", code, typed)
 			return
 		}
-		ss, e = s.enrollParticipant(r.Context(), code, name)
+		ss, e = s.enrollParticipant(r.Context(), code, name, answer)
 		if e != nil {
 			field := ""
 			switch {
@@ -864,6 +944,8 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 				field = "code"
 			case errors.Is(e, errNameTaken):
 				field = "name"
+			case errors.Is(e, errBadAnswer):
+				field = "answer"
 			}
 			// The folded name goes back in the box, not the raw one: it is what
 			// would have been stored, and it is what the participant has to
@@ -912,6 +994,10 @@ var errBadCode = errors.New("That code is invalid or joining has closed. Check t
 // participant can actually change.
 var errNameTaken = errors.New("That name is already taken in this room. Please choose another.")
 
+// And an answer the Room does not offer. The browser will not submit the form
+// without one, so this is a forged form or a browser that skipped the check.
+var errBadAnswer = errors.New("Please pick one of the answers.")
+
 // maxTypedCodeLength matches the code field's maxlength, so a value that only
 // a forged form could carry is bounded before it goes back into the page.
 const maxTypedCodeLength = 24
@@ -934,7 +1020,7 @@ func typedCode(raw string) string {
 	}, strings.ToValidUTF8(v, ""))
 }
 
-func (s *Server) enrollParticipant(ctx context.Context, code, name string) (session, error) {
+func (s *Server) enrollParticipant(ctx context.Context, code, name, answer string) (session, error) {
 	result := "storage_error"
 	defer func() {
 		if s.metrics != nil {
@@ -951,6 +1037,14 @@ func (s *Server) enrollParticipant(ctx context.Context, code, name string) (sess
 		result = "code_or_room_rejected"
 		return session{}, errBadCode
 	}
+	// Checked against the Room read under the lock, the same one the code was
+	// accepted by: a question edited mid-join started a new code epoch, so the
+	// code and the answers a form carries always come from one version of it.
+	groups, e := answerGroups(room, answer)
+	if e != nil {
+		result = "answer_rejected"
+		return session{}, e
+	}
 	ps := &api.ParticipantList{}
 	if e = s.db.List(ctx, ps, client.InNamespace(room.Namespace)); e != nil {
 		return session{}, errors.New("Room temporarily unavailable")
@@ -965,7 +1059,7 @@ func (s *Server) enrollParticipant(ctx context.Context, code, name string) (sess
 		result = "full"
 		return session{}, errors.New("This room is full. Please ask the presenter.")
 	}
-	p := &api.Participant{ObjectMeta: metav1.ObjectMeta{Name: participantPrefix + participantID(name), Namespace: room.Namespace, OwnerReferences: []metav1.OwnerReference{{APIVersion: api.GroupVersion.String(), Kind: "Room", Name: room.Name, UID: room.UID}}}, Spec: api.ParticipantSpec{RoomRef: api.RoomRef{Name: room.Name, UID: string(room.UID)}, DisplayName: name}}
+	p := &api.Participant{ObjectMeta: metav1.ObjectMeta{Name: participantPrefix + participantID(name), Namespace: room.Namespace, OwnerReferences: []metav1.OwnerReference{{APIVersion: api.GroupVersion.String(), Kind: "Room", Name: room.Name, UID: room.UID}}}, Spec: api.ParticipantSpec{RoomRef: api.RoomRef{Name: room.Name, UID: string(room.UID)}, DisplayName: name, Groups: groups}}
 	if e = s.db.Create(ctx, p); e != nil {
 		if !apierrors.IsAlreadyExists(e) {
 			return session{}, errors.New("Enrollment could not be confirmed. Please retry.")
@@ -1067,7 +1161,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("X-Remote-User", p.Spec.DisplayName)
 	r.Header.Set("X-Remote-User-Name", p.Spec.DisplayName)
 	r.Header.Set("X-Remote-User-Email", participantEmail(p))
-	r.Header.Set("X-Remote-Group", room.Spec.AudienceGroup)
+	r.Header.Set("X-Remote-Group", groupHeader(room, p))
 	r.Header.Del("Cookie")
 	r.Header.Del("Authorization")
 	r.URL.Path = s.callbackPath()

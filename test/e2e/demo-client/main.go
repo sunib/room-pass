@@ -28,7 +28,7 @@ import (
 
 const origin = "https://demo.room-pass.test:18443"
 
-type session struct{ Token, Name, State, Verifier string }
+type session struct{ Token, Name, Groups, State, Verifier string }
 
 func id() string {
 	b := make([]byte, 32)
@@ -88,10 +88,14 @@ func main() {
 	kp := x509.NewCertPool()
 	kp.AppendCertsFromPEM(kubeCA)
 	kube := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: kp, MinVersion: tls.VersionTLS12}}}
-	page := template.Must(template.New("app").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Room Pass demo</title><style>body{font:18px system-ui;max-width:36rem;margin:3rem auto;padding:1rem;color:#172033}button,a{font:inherit;padding:.8rem}pre{white-space:pre-wrap}</style><h1>Room Pass demo</h1>{{if .Name}}<p>Welcome, {{.Name}}.</p><form action="/app/write" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Write a message to Kubernetes</button></form><pre>{{.Result}}</pre><p>This uses your demo identity. Work resources are outside its permissions.</p>{{else}}<p>Join the room, then make a real Kubernetes change.</p>{{end}}<p><a href="/app/login">{{if .Name}}Sign in again{{else}}Join the demo{{end}}</a></p></html>`))
+	page := template.Must(template.New("app").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Room Pass demo</title><style>body{font:18px system-ui;max-width:36rem;margin:3rem auto;padding:1rem;color:#172033}button,a{font:inherit;padding:.8rem}pre{white-space:pre-wrap}</style><h1>Room Pass demo</h1>{{if .Name}}<p>Welcome, {{.Name}}.</p><p>Your groups: {{.Groups}}</p><form action="/app/write" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Write a message to Kubernetes</button></form><pre>{{.Result}}</pre><p>This uses your demo identity. Work resources are outside its permissions.</p>{{else}}<p>Join the room, then make a real Kubernetes change.</p>{{end}}<p><a href="/app/login">{{if .Name}}Sign in again{{else}}Join the demo{{end}}</a></p></html>`))
 	http.HandleFunc("/app/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Referrer-Policy", "no-referrer")
+		// same-origin, not no-referrer: under no-referrer a browser sends the
+		// write form's Origin as "null", and the check below refused every real
+		// browser while Go clients, which set Origin themselves, passed. Room
+		// Pass learned the same thing the same way.
+		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
 		s, e := get(r)
 		switch r.URL.Path {
@@ -130,11 +134,14 @@ func main() {
 				http.Error(w, "Token invalid", 403)
 				return
 			}
+			// The groups are shown so the browser suite can read what a Room's
+			// question added, from the token Dex actually issued.
 			var claims struct {
-				Name string `json:"name"`
+				Name   string   `json:"name"`
+				Groups []string `json:"groups"`
 			}
 			_ = verified.Claims(&claims)
-			set(w, session{Token: raw, Name: claims.Name, State: id()})
+			set(w, session{Token: raw, Name: claims.Name, Groups: strings.Join(claims.Groups, ", "), State: id()})
 			http.Redirect(w, r, "/app/", 303)
 			return
 		case "/app/write":
@@ -156,11 +163,11 @@ func main() {
 			b, _ := io.ReadAll(io.LimitReader(resp.Body, 16384))
 			result := fmt.Sprintf("Kubernetes returned %d\n%s", resp.StatusCode, b)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_ = page.Execute(w, map[string]string{"Name": s.Name, "CSRF": s.State, "Result": result})
+			_ = page.Execute(w, map[string]string{"Name": s.Name, "Groups": s.Groups, "CSRF": s.State, "Result": result})
 			return
 		case "/app/":
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_ = page.Execute(w, map[string]string{"Name": s.Name, "CSRF": s.State})
+			_ = page.Execute(w, map[string]string{"Name": s.Name, "Groups": s.Groups, "CSRF": s.State})
 			return
 		default:
 			http.NotFound(w, r)
