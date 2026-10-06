@@ -66,6 +66,22 @@ spec:
                 x-kubernetes-validations:
                 - message: displayName is immutable
                   rule: self == oldSelf
+              groups:
+                description: |-
+                  Groups are this participant's groups beside the Room's audienceGroup:
+                  the group of the answer they picked, when the Room asked a question.
+                  Room Pass sends them to Dex at every sign-in. Like the display name, they
+                  are the participant's choice, never verified.
+
+                  An operator may change them. The next sign-in carries the change; a
+                  token already issued keeps the groups it was issued with.
+                items:
+                  maxLength: 128
+                  pattern: ^demo:[a-zA-Z0-9][a-zA-Z0-9:_-]*$
+                  type: string
+                maxItems: 8
+                type: array
+                x-kubernetes-list-type: set
               revoked:
                 default: false
                 type: boolean

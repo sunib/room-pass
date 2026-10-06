@@ -59,7 +59,7 @@ func TestEnrollmentConcurrencyAndLifecycle(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			if _, e := s.enrollParticipant(context.Background(), "bcd-fgh", fmt.Sprintf("Ada %d", i)); e == nil {
+			if _, e := s.enrollParticipant(context.Background(), "bcd-fgh", fmt.Sprintf("Ada %d", i), ""); e == nil {
 				ok.Add(1)
 			}
 		}(i)
@@ -68,7 +68,7 @@ func TestEnrollmentConcurrencyAndLifecycle(t *testing.T) {
 	if ok.Load() != 100 {
 		t.Fatalf("shared-room burst: %d", ok.Load())
 	}
-	if _, e := s.enrollParticipant(context.Background(), "BCDFGH", "overflow"); e == nil {
+	if _, e := s.enrollParticipant(context.Background(), "BCDFGH", "overflow", ""); e == nil {
 		t.Fatal("cap bypassed")
 	}
 	ps := &api.ParticipantList{}
@@ -155,7 +155,7 @@ func hidden(body, name string) string {
 // looking at the presenter's screen again.
 func TestARejectedJoinKeepsWhatWasTyped(t *testing.T) {
 	s, _ := fixture(t, "http://dex.test")
-	if _, e := s.enrollParticipant(context.Background(), "BCDFGH", "Ada"); e != nil {
+	if _, e := s.enrollParticipant(context.Background(), "BCDFGH", "Ada", ""); e != nil {
 		t.Fatal(e)
 	}
 	submit := func(b *browser, form url.Values) *httptest.ResponseRecorder {
@@ -349,7 +349,7 @@ func TestStolenCrossHostLinkCannotEnroll(t *testing.T) {
 func TestCurrentRoomStateAndCookieTampering(t *testing.T) {
 	s, db := fixture(t, "http://dex.test")
 	ctx := context.Background()
-	ss, e := s.enrollParticipant(ctx, "BCDFGH", "Ada")
+	ss, e := s.enrollParticipant(ctx, "BCDFGH", "Ada", "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -488,7 +488,7 @@ func TestIdentityRequiresCurrentEnrollment(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, db := fixture(t, "http://dex.test")
 			ctx := context.Background()
-			ss, err := s.enrollParticipant(ctx, "BCDFGH", "Ada")
+			ss, err := s.enrollParticipant(ctx, "BCDFGH", "Ada", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -674,7 +674,7 @@ func TestScannedCodeIsAPrefillAndNothingMore(t *testing.T) {
 		// That has to be worth nothing: the POST re-checks the value against
 		// the Room's valid codes, so a made-up one fails exactly as a typed
 		// made-up one fails.
-		if _, err := s.enrollParticipant(context.Background(), "ZZZZZZ", "Mallory"); err == nil {
+		if _, err := s.enrollParticipant(context.Background(), "ZZZZZZ", "Mallory", ""); err == nil {
 			t.Fatal("a code that the Room never issued was accepted")
 		}
 	})
@@ -871,14 +871,14 @@ func TestNamesWithoutUsableCharactersAreRefused(t *testing.T) {
 // quietly seated at the first person's Participant with their own cookie.
 func TestASecondClaimOnANameIsRefused(t *testing.T) {
 	s, db := fixture(t, "http://dex.test")
-	first, e := s.enrollParticipant(context.Background(), "BCDFGH", "Ada Demo")
+	first, e := s.enrollParticipant(context.Background(), "BCDFGH", "Ada Demo", "")
 	if e != nil {
 		t.Fatal(e)
 	}
 	if first.Name != "p-ada-demo" {
 		t.Fatalf("participant object name: %q", first.Name)
 	}
-	if _, e = s.enrollParticipant(context.Background(), "BCDFGH", "ada  demo"); !errors.Is(e, errNameTaken) {
+	if _, e = s.enrollParticipant(context.Background(), "BCDFGH", "ada  demo", ""); !errors.Is(e, errNameTaken) {
 		t.Fatalf("a colliding name enrolled anyway: %v", e)
 	}
 	ps := &api.ParticipantList{}
@@ -886,7 +886,7 @@ func TestASecondClaimOnANameIsRefused(t *testing.T) {
 	if len(ps.Items) != 1 {
 		t.Fatalf("participants after the refused claim: %d", len(ps.Items))
 	}
-	if _, e = s.enrollParticipant(context.Background(), "BCDFGH", "Ada Demo 2"); e != nil {
+	if _, e = s.enrollParticipant(context.Background(), "BCDFGH", "Ada Demo 2", ""); e != nil {
 		t.Fatal(e)
 	}
 }
@@ -1179,6 +1179,240 @@ func TestAppearancePatternsAreTheCRDs(t *testing.T) {
 	for _, path := range []string{"", "/", "//evil.example/x.png", "https://evil.example/x.png", "logo.png", `/\evil.example`, "/a b.png", `/a".png`, "/a'.png", "/a(.png", "/a#frag"} {
 		if sameOriginPath.MatchString(path) {
 			t.Errorf("%q should be refused", path)
+		}
+	}
+}
+
+// setQuestion replaces the fixture Room's question, as an operator's apply
+// would.
+func setQuestion(t *testing.T, s *Server, db client.Client, q *api.RoomQuestion) {
+	t.Helper()
+	room := &api.Room{}
+	if e := db.Get(context.Background(), s.cfg.Room, room); e != nil {
+		t.Fatal(e)
+	}
+	room.Spec.Question = q
+	if e := db.Update(context.Background(), room); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func frameworks() *api.RoomQuestion {
+	return &api.RoomQuestion{Prompt: "Your favourite frontend framework?", Answers: []api.RoomAnswer{
+		{Label: "React", Group: "demo:framework-react"},
+		{Label: "Vue", Group: "demo:framework-vue"},
+		{Label: "Svelte", Group: "demo:framework-svelte"},
+	}}
+}
+
+// joinPage walks a browser from Dex's callback to the join page, as a login
+// does, and returns the page.
+func joinPage(t *testing.T, s *Server, b *browser) string {
+	t.Helper()
+	w := b.request(s, "GET", "https://login.test/callback/room-pass?state=dex-transaction", nil)
+	for i := 0; i < 3; i++ {
+		if w.Code != 303 {
+			t.Fatalf("binding step %d: %d %s", i, w.Code, w.Body.String())
+		}
+		w = b.request(s, "GET", w.Header().Get("Location"), nil)
+	}
+	if w.Code != 200 {
+		t.Fatalf("join page: %d %s", w.Code, w.Body.String())
+	}
+	return w.Body.String()
+}
+
+// submit posts the form a page rendered, filled in with fields.
+func submit(s *Server, b *browser, page string, fields url.Values) *httptest.ResponseRecorder {
+	form := url.Values{"csrf": {hidden(page, "csrf")}, "handoff": {hidden(page, "handoff")}, "return": {hidden(page, "return")}}
+	for k, v := range fields {
+		form[k] = v
+	}
+	return b.request(s, "POST", "https://demo.test/join", form)
+}
+
+// dexRecorder stands in for Dex and keeps the group header of the identity
+// Room Pass hands it.
+func dexRecorder(t *testing.T) (url string, group func() string) {
+	t.Helper()
+	var mu sync.Mutex
+	got := ""
+	dex := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		got = r.Header.Get("X-Remote-Group")
+		mu.Unlock()
+		w.WriteHeader(204)
+	}))
+	t.Cleanup(dex.Close)
+	return dex.URL, func() string { mu.Lock(); defer mu.Unlock(); return got }
+}
+
+func participantsOf(t *testing.T, db client.Client) []api.Participant {
+	t.Helper()
+	ps := &api.ParticipantList{}
+	if e := db.List(context.Background(), ps); e != nil {
+		t.Fatal(e)
+	}
+	return ps.Items
+}
+
+// A Room without a question is every Room that existed before the field did,
+// including the one a minor release rolls out to unattended. Nobody is asked
+// anything, and an answer in a forged form adds no group: the identity Dex
+// receives is exactly the one it always was.
+func TestARoomWithoutAQuestionAddsNoGroup(t *testing.T) {
+	upstream, group := dexRecorder(t)
+	s, db := fixture(t, upstream)
+	for _, q := range []*api.RoomQuestion{nil, {Prompt: "Only one?", Answers: []api.RoomAnswer{{Label: "Yes", Group: "demo:yes"}}}} {
+		setQuestion(t, s, db, q)
+		body := newBrowser().request(s, "GET", "https://demo.test/join", nil).Body.String()
+		for _, absent := range []string{"<fieldset", `name="answer"`, "your answer"} {
+			if strings.Contains(body, absent) {
+				t.Errorf("question %+v: the page contains %q", q, absent)
+			}
+		}
+		if !strings.Contains(body, "<small>Your name is an unverified label, not a verified identity. It is shown to the application you are joining, together with the address above.</small>") {
+			t.Errorf("question %+v: the notice changed", q)
+		}
+	}
+	b := newBrowser()
+	page := joinPage(t, s, b)
+	w := submit(s, b, page, url.Values{"code": {"BCDFGH"}, "name": {"Ada"}, "answer": {"demo:yes"}})
+	if w.Code != 303 {
+		t.Fatalf("join: %d %s", w.Code, w.Body.String())
+	}
+	if w = b.request(s, "GET", w.Header().Get("Location"), nil); w.Code != 204 {
+		t.Fatalf("complete: %d %s", w.Code, w.Body.String())
+	}
+	if got := group(); got != "demo:test" {
+		t.Errorf("X-Remote-Group = %q, want the audience group alone", got)
+	}
+	if ps := participantsOf(t, db); len(ps) != 1 || ps[0].Spec.Groups != nil {
+		t.Errorf("a forged answer was stored: %+v", ps)
+	}
+}
+
+// The demo this was built for: everyone picks a framework at the door, and the
+// framework's group arrives in their token beside the Room's, where RBAC can
+// tell the Svelte people from the rest.
+func TestTheAnswerBecomesAGroup(t *testing.T) {
+	upstream, group := dexRecorder(t)
+	s, db := fixture(t, upstream)
+	setQuestion(t, s, db, frameworks())
+	b := newBrowser()
+	page := joinPage(t, s, b)
+	for _, want := range []string{
+		`<fieldset class="question"><legend>Your favourite frontend framework?</legend>`,
+		`<label class="answer"><input type="radio" name="answer" value="demo:framework-react" required>React</label>`,
+		`<label class="answer"><input type="radio" name="answer" value="demo:framework-svelte" required>Svelte</label></fieldset>`,
+		"Your name and your answer are unverified labels",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the join page lacks %q:\n%s", want, page)
+		}
+	}
+	w := submit(s, b, page, url.Values{"code": {"BCDFGH"}, "name": {"Ada"}, "answer": {"demo:framework-svelte"}})
+	if w.Code != 303 {
+		t.Fatalf("join: %d %s", w.Code, w.Body.String())
+	}
+	ps := participantsOf(t, db)
+	if len(ps) != 1 || len(ps[0].Spec.Groups) != 1 || ps[0].Spec.Groups[0] != "demo:framework-svelte" {
+		t.Fatalf("the answer was not kept on the Participant: %+v", ps)
+	}
+	if w = b.request(s, "GET", w.Header().Get("Location"), nil); w.Code != 204 {
+		t.Fatalf("complete: %d %s", w.Code, w.Body.String())
+	}
+	if got := group(); got != "demo:test,demo:framework-svelte" {
+		t.Errorf("X-Remote-Group = %q, want the audience group and the answer's", got)
+	}
+	// Returning, the participant is not asked again and sees what they picked:
+	// it is part of the identity they are about to continue as.
+	body := b.request(s, "GET", "https://demo.test/join", nil).Body.String()
+	if !strings.Contains(body, "You’re already enrolled as <strong>Ada</strong>, and you picked <strong>Svelte</strong>.") {
+		t.Errorf("the returning page hides the answer: %s", body)
+	}
+	if strings.Contains(body, "<fieldset") {
+		t.Error("a returning participant is asked the question again")
+	}
+}
+
+// Only one of the Room's own answers is ever stored. Anything else -- no answer,
+// a group the Room never offered, the audience group, a group outside demo: --
+// is refused on the question, with the code and the name kept.
+func TestAnAnswerTheRoomDoesNotOfferIsRefused(t *testing.T) {
+	s, db := fixture(t, "http://dex.test")
+	setQuestion(t, s, db, frameworks())
+	b := newBrowser()
+	page := joinPage(t, s, b)
+	for _, answer := range []string{"", "demo:framework-angular", "demo:test", "system:masters", "demo:framework-svelte,system:masters", "Svelte"} {
+		w := submit(s, b, page, url.Values{"code": {"BCD-FGH"}, "name": {"Ada"}, "answer": {answer}})
+		page = w.Body.String()
+		if w.Code != 403 || !strings.Contains(page, errBadAnswer.Error()) {
+			t.Fatalf("answer %q: %d %s", answer, w.Code, page)
+		}
+		for _, kept := range []string{`<fieldset class="question invalid">`, `value="BCD-FGH"`, `value="Ada"`, `value="demo:framework-react" required autofocus>`} {
+			if !strings.Contains(page, kept) {
+				t.Errorf("answer %q: the refused page lacks %q", answer, kept)
+			}
+		}
+		if strings.Contains(page, " checked") {
+			t.Errorf("answer %q: an answer the Room does not offer was checked", answer)
+		}
+	}
+	if ps := participantsOf(t, db); len(ps) != 0 {
+		t.Fatalf("a refused answer enrolled: %+v", ps)
+	}
+	// A join refused for something else keeps the answer picked, so a mistyped
+	// code is the only thing to fix.
+	w := submit(s, b, page, url.Values{"code": {"WRONG1"}, "name": {"Ada"}, "answer": {"demo:framework-vue"}})
+	if w.Code != 403 || !strings.Contains(w.Body.String(), `value="demo:framework-vue" required checked>`) {
+		t.Fatalf("a wrong code dropped the answer: %d %s", w.Code, w.Body.String())
+	}
+	if w = submit(s, b, w.Body.String(), url.Values{"code": {"BCDFGH"}, "name": {"Ada"}, "answer": {"demo:framework-vue"}}); w.Code != 303 {
+		t.Fatalf("a corrected form did not enroll: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// The CRD refuses all of these. A Room or Participant that holds one anyway --
+// an older CRD, a schema edited by hand -- loses the group rather than putting
+// it in front of Dex, which would split "demo:a,system:masters" into two.
+func TestGroupsThatEscapedTheSchemaAreNotSent(t *testing.T) {
+	room := &api.Room{Spec: api.RoomSpec{AudienceGroup: "demo:test", Question: &api.RoomQuestion{Prompt: "?", Answers: []api.RoomAnswer{
+		{Label: "Fine", Group: "demo:fine"},
+		{Label: "Two", Group: "demo:a,system:masters"},
+		{Label: "System", Group: "system:masters"},
+		{Label: "Long", Group: "demo:" + strings.Repeat("x", 124)},
+	}}}}
+	p := &api.Participant{Spec: api.ParticipantSpec{Groups: []string{"demo:fine", "demo:a,system:masters", "system:masters", "demo:test", "demo:fine", "demo:" + strings.Repeat("x", 124)}}}
+	if got := groupHeader(room, p); got != "demo:test,demo:fine" {
+		t.Errorf("groupHeader = %q", got)
+	}
+	// One usable answer is not a question anybody can be asked.
+	if q := questionOf(room); q != nil {
+		t.Errorf("a question with one usable answer is asked: %+v", q)
+	}
+	if groups, e := answerGroups(room, "demo:fine"); e != nil || groups != nil {
+		t.Errorf("answerGroups = %v, %v for a question that is not asked", groups, e)
+	}
+	room.Spec.Question.Answers = append(room.Spec.Question.Answers, api.RoomAnswer{Label: "Also fine", Group: "demo:also-fine"})
+	if q := questionOf(room); q == nil || len(q.Answers) != 2 {
+		t.Errorf("questionOf = %+v, want the two usable answers", q)
+	}
+	if _, e := answerGroups(room, "system:masters"); !errors.Is(e, errBadAnswer) {
+		t.Errorf("an answer the page never offered was accepted: %v", e)
+	}
+}
+
+// The server's group pattern is a second check on the CRDs', so it must be
+// the same one.
+func TestGroupPatternIsTheCRDs(t *testing.T) {
+	for file, want := range map[string]int{"rooms": 2, "participants": 1} {
+		crd, e := os.ReadFile("../../config/crd/bases/room-pass.koudijs.dev_" + file + ".yaml")
+		if e != nil {
+			t.Fatal(e)
+		}
+		if n := strings.Count(string(crd), "pattern: "+demoGroup.String()+"\n"); n != want {
+			t.Errorf("the %s CRD carries %s %d times, want %d", file, demoGroup, n, want)
 		}
 	}
 }

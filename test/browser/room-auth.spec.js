@@ -311,3 +311,75 @@ test("a forged join code is still just a wrong code", async ({ page }) => {
     participants().filter((p) => p.spec.displayName === storedName),
   ).toHaveLength(0);
 });
+
+// A Room's question, end to end: the browser will not join without an answer,
+// the answer is kept on the Participant, Dex splits the group header into the
+// token's groups, and the apiserver accepts a token carrying both. Each of those
+// is a different program, and this is the only place they all run together.
+test("a Room's question adds the picked answer to the token's groups", async ({
+  page,
+}, testInfo) => {
+  try {
+    patchRoom({
+      question: {
+        prompt: "Your favourite frontend framework?",
+        answers: [
+          { label: "React", group: "demo:framework-react" },
+          { label: "Vue", group: "demo:framework-vue" },
+          { label: "Svelte", group: "demo:framework-svelte" },
+        ],
+      },
+    });
+    await roomSettled();
+    await page.goto("/app/login");
+    const question = page.getByRole("group", {
+      name: "Your favourite frontend framework?",
+    });
+    await expect(question.getByRole("radio")).toHaveCount(3);
+    await page.getByLabel("Room code").fill(room().status.joinCode.code);
+    await page.getByLabel("Display name").fill(testName);
+    // Nothing picked: the browser holds the form back.
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    expect(
+      await question
+        .getByRole("radio", { name: "React" })
+        .evaluate((r) => r.validity.valueMissing),
+    ).toBe(true);
+    expect(
+      participants().filter((p) => p.spec.displayName === storedName),
+    ).toHaveLength(0);
+    await question.getByRole("radio", { name: "Svelte" }).check();
+    await page.screenshot({
+      path: testInfo.outputPath("question.png"),
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(
+      page.getByText(`Welcome, ${storedName}.`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Your groups: demo:room-pass-test, demo:framework-svelte",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    const [p] = participants().filter((p) => p.spec.displayName === storedName);
+    expect(p.spec.groups).toEqual(["demo:framework-svelte"]);
+    await page
+      .getByRole("button", { name: "Write a message to Kubernetes" })
+      .click();
+    await expect(page.getByText(/^Kubernetes returned 201/)).toBeVisible();
+    // Returning, nobody is asked twice; the page says what they picked.
+    await page.getByRole("link", { name: "Sign in again" }).click();
+    await expect(
+      page.getByText(
+        `You’re already enrolled as ${storedName}, and you picked Svelte.`,
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole("radio")).toHaveCount(0);
+  } finally {
+    patchRoom({ question: null });
+    await roomSettled();
+  }
+});

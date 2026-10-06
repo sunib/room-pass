@@ -197,6 +197,64 @@ spec:
                 maximum: 10000
                 minimum: 1
                 type: integer
+              question:
+                description: |-
+                  Question asks everyone who joins to pick one answer, and the group of
+                  that answer joins the audienceGroup in their token. Empty, nobody is
+                  asked and the audienceGroup is their only group, as before.
+
+                  The participant chooses, so an answer is as unverified as a display
+                  name: bind its group only to what anyone in the room may choose to have.
+
+                  The answer is kept on the Participant (spec.groups) at enrollment.
+                  Changing the question later changes nothing for those already enrolled,
+                  and nobody who enrolled before it existed is asked. Like any spec
+                  change, editing it starts a fresh join-code epoch. Set it before the
+                  event.
+                properties:
+                  answers:
+                    description: Answers are shown in this order, and every participant
+                      picks one.
+                    items:
+                      properties:
+                        group:
+                          description: |-
+                            Group is what picking it adds to the participant's groups, such as
+                            demo:framework-svelte. It follows audienceGroup's rules, so the
+                            apiserver's demo:-only containment rule covers it unchanged.
+                          maxLength: 128
+                          pattern: ^demo:[a-zA-Z0-9][a-zA-Z0-9:_-]*$
+                          type: string
+                        label:
+                          description: Label is what the participant picks, such as
+                            Svelte.
+                          maxLength: 60
+                          minLength: 1
+                          pattern: ^[^<>\x00-\x1f\x7f]*$
+                          type: string
+                      required:
+                      - group
+                      - label
+                      type: object
+                    maxItems: 8
+                    minItems: 2
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - group
+                    x-kubernetes-list-type: map
+                    x-kubernetes-validations:
+                    - message: answer labels must be unique
+                      rule: self.all(a, self.exists_one(b, b.label == a.label))
+                  prompt:
+                    description: Prompt is the question, shown above the answers.
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[^<>\x00-\x1f\x7f]*$
+                    type: string
+                required:
+                - answers
+                - prompt
+                type: object
               stopped:
                 default: false
                 description: Stopped permanently denies enrollment and new identity

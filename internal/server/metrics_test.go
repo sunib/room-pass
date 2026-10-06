@@ -19,10 +19,10 @@ func TestMetricsReflectOutcomesWithoutIdentityLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.enrollParticipant(context.Background(), "WRONG", "private-name"); err == nil {
+	if _, err := s.enrollParticipant(context.Background(), "WRONG", "private-name", ""); err == nil {
 		t.Fatal("invalid code accepted")
 	}
-	if _, err := s.enrollParticipant(context.Background(), "BCDFGH", "private-name"); err != nil {
+	if _, err := s.enrollParticipant(context.Background(), "BCDFGH", "private-name", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"/healthz", "/unknown-private-name?code=SECRET", "/another-random-path"} {

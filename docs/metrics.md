@@ -26,8 +26,9 @@ metrics. There is no separate telemetry pipeline or per-request Kubernetes scrap
 | `room_pass_handoff_slots_used` | How much of the in-memory transaction map is allocated? |
 | `room_pass_handoff_capacity` | What is the configured transaction limit? |
 
-Enrollment result values are `enrolled`, `code_or_room_rejected`, `full` and
-`storage_error` (which includes inability to generate/confirm enrollment).
+Enrollment result values are `enrolled`, `code_or_room_rejected`,
+`answer_rejected` (an answer the Room's question does not offer), `name_taken`,
+`full` and `storage_error` (which includes inability to generate/confirm enrollment).
 `enrolled` is recorded only after a Participant create is confirmed, including
 recovery of a lost create response. Returning participants do not inflate it.
 It is a process-local counter, not the current number of Participants in Kubernetes.

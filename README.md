@@ -145,6 +145,9 @@ variable added to the base later still arrives. A Room needs a future end time, 
 `spec.appearance`: a tagline, a picture, an accent colour and a background,
 served from the application's own host
 ([install guide](docs/install.md#dress-the-join-page-for-the-talk-optional)).
+With `spec.question` it asks one question at the door, and the `demo:` group of
+the answer joins `audienceGroup` in the participant's token
+([install guide](docs/install.md#ask-one-question-at-the-door-optional)).
 Required cookie Secret:
 
 ```sh

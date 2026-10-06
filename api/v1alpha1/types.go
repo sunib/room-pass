@@ -63,6 +63,20 @@ type RoomSpec struct {
 	// invalidates the code on screen. Set it before the event.
 	// +optional
 	Appearance *RoomAppearance `json:"appearance,omitempty"`
+	// Question asks everyone who joins to pick one answer, and the group of
+	// that answer joins the audienceGroup in their token. Empty, nobody is
+	// asked and the audienceGroup is their only group, as before.
+	//
+	// The participant chooses, so an answer is as unverified as a display
+	// name: bind its group only to what anyone in the room may choose to have.
+	//
+	// The answer is kept on the Participant (spec.groups) at enrollment.
+	// Changing the question later changes nothing for those already enrolled,
+	// and nobody who enrolled before it existed is asked. Like any spec
+	// change, editing it starts a fresh join-code epoch. Set it before the
+	// event.
+	// +optional
+	Question *RoomQuestion `json:"question,omitempty"`
 	// EndsAt can be extended without changing participant identities.
 	EndsAt metav1.Time `json:"endsAt"`
 	// +kubebuilder:default=Closed
@@ -137,6 +151,38 @@ type RoomAppearance struct {
 	// +kubebuilder:validation:Pattern="^/[A-Za-z0-9._~%!$&+,;=:@?-][A-Za-z0-9._~%!$&+,;=:@/?-]*$"
 	// +optional
 	BackgroundImage string `json:"backgroundImage,omitempty"`
+}
+
+// RoomQuestion is the one question a Room asks at the door. Every answer names
+// a group, so a group from this list is all a participant can choose: never a
+// username, never a group outside demo:, never one the operator did not write.
+type RoomQuestion struct {
+	// Prompt is the question, shown above the answers.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=120
+	// +kubebuilder:validation:Pattern="^[^<>\\x00-\\x1f\\x7f]*$"
+	Prompt string `json:"prompt"`
+	// Answers are shown in this order, and every participant picks one.
+	// +kubebuilder:validation:MinItems=2
+	// +kubebuilder:validation:MaxItems=8
+	// +listType=map
+	// +listMapKey=group
+	// +kubebuilder:validation:XValidation:rule="self.all(a, self.exists_one(b, b.label == a.label))",message="answer labels must be unique"
+	Answers []RoomAnswer `json:"answers"`
+}
+
+type RoomAnswer struct {
+	// Label is what the participant picks, such as Svelte.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=60
+	// +kubebuilder:validation:Pattern="^[^<>\\x00-\\x1f\\x7f]*$"
+	Label string `json:"label"`
+	// Group is what picking it adds to the participant's groups, such as
+	// demo:framework-svelte. It follows audienceGroup's rules, so the
+	// apiserver's demo:-only containment rule covers it unchanged.
+	// +kubebuilder:validation:Pattern="^demo:[a-zA-Z0-9][a-zA-Z0-9:_-]*$"
+	// +kubebuilder:validation:MaxLength=128
+	Group string `json:"group"`
 }
 
 type Code struct {
@@ -230,6 +276,19 @@ type ParticipantSpec struct {
 	// +kubebuilder:validation:Pattern="^[A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?$"
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="displayName is immutable"
 	DisplayName string `json:"displayName"`
+	// Groups are this participant's groups beside the Room's audienceGroup:
+	// the group of the answer they picked, when the Room asked a question.
+	// Room Pass sends them to Dex at every sign-in. Like the display name, they
+	// are the participant's choice, never verified.
+	//
+	// An operator may change them. The next sign-in carries the change; a
+	// token already issued keeps the groups it was issued with.
+	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:items:Pattern="^demo:[a-zA-Z0-9][a-zA-Z0-9:_-]*$"
+	// +kubebuilder:validation:items:MaxLength=128
+	// +listType=set
+	// +optional
+	Groups []string `json:"groups,omitempty"`
 	// +kubebuilder:default=false
 	// +kubebuilder:validation:XValidation:rule="!oldSelf || self",message="revocation is irreversible"
 	Revoked bool `json:"revoked"`

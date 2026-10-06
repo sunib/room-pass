@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -62,7 +63,20 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{Picture: "//evil.test/logo.png"} },
 		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{BackgroundImage: `/a")`} },
 		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{Tagline: "<b>bold</b>"} },
-		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{PictureAlt: strings.Repeat("x", 121)} }} {
+		func(r *api.Room) { r.Spec.Appearance = &api.RoomAppearance{PictureAlt: strings.Repeat("x", 121)} },
+		// A question's answers are groups, so they follow audienceGroup's rules.
+		func(r *api.Room) { r.Spec.Question = question(answer("A", "system:masters"), answer("B", "demo:b")) },
+		func(r *api.Room) {
+			r.Spec.Question = question(answer("A", "demo:a,system:masters"), answer("B", "demo:b"))
+		},
+		func(r *api.Room) { r.Spec.Question = question(answer("A", "demo:a")) },
+		func(r *api.Room) { r.Spec.Question = question(answer("A", "demo:a"), answer("B", "demo:a")) },
+		func(r *api.Room) { r.Spec.Question = question(answer("Same", "demo:a"), answer("Same", "demo:b")) },
+		func(r *api.Room) { r.Spec.Question = question(answer("<b>A</b>", "demo:a"), answer("B", "demo:b")) },
+		func(r *api.Room) {
+			r.Spec.Question = question(answer("A", "demo:a"), answer("B", "demo:b"))
+			r.Spec.Question.Prompt = ""
+		}} {
 		bad := room.DeepCopy()
 		mutate(bad)
 		if db.Update(ctx, bad) == nil {
@@ -89,6 +103,14 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 	if e = db.Update(ctx, room); e != nil {
 		t.Fatalf("appearance cannot be removed: %v", e)
 	}
+	asked := question(answer("React", "demo:framework-react"), answer("Svelte", "demo:framework-svelte"))
+	room.Spec.Question = asked
+	if e = db.Update(ctx, room); e != nil {
+		t.Fatalf("question rejected: %v", e)
+	}
+	if e = db.Get(ctx, key, room); e != nil || room.Spec.Question == nil || !reflect.DeepEqual(*room.Spec.Question, *asked) {
+		t.Fatalf("question did not round-trip: %+v %v", room.Spec.Question, e)
+	}
 	rec := &controller.Reconciler{Client: db, Room: key}
 	if _, e = rec.Reconcile(ctx, ctrl.Request{NamespacedName: key}); e != nil {
 		t.Fatal(e)
@@ -114,9 +136,22 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 	if db.Update(ctx, room) == nil {
 		t.Fatal("stop reversed")
 	}
-	p := &api.Participant{ObjectMeta: metav1.ObjectMeta{Name: "p-test", Namespace: room.Namespace}, Spec: api.ParticipantSpec{RoomRef: api.RoomRef{Name: room.Name, UID: string(room.UID)}, DisplayName: "Ada"}}
+	// A Participant's groups follow the same rules as the answers they come from.
+	for _, groups := range [][]string{{"system:masters"}, {"demo:a,system:masters"}, {"demo:a", "demo:a"}} {
+		bad := &api.Participant{ObjectMeta: metav1.ObjectMeta{Name: "p-bad", Namespace: room.Namespace}, Spec: api.ParticipantSpec{RoomRef: api.RoomRef{Name: room.Name, UID: string(room.UID)}, DisplayName: "Bad", Groups: groups}}
+		if db.Create(ctx, bad) == nil {
+			t.Fatalf("invalid groups accepted: %v", groups)
+		}
+	}
+	p := &api.Participant{ObjectMeta: metav1.ObjectMeta{Name: "p-test", Namespace: room.Namespace}, Spec: api.ParticipantSpec{RoomRef: api.RoomRef{Name: room.Name, UID: string(room.UID)}, DisplayName: "Ada", Groups: []string{"demo:framework-svelte"}}}
 	if e = db.Create(ctx, p); e != nil {
 		t.Fatal(e)
+	}
+	// An operator may move a participant to another group; their next sign-in
+	// carries it.
+	p.Spec.Groups = []string{"demo:framework-react"}
+	if e = db.Update(ctx, p); e != nil {
+		t.Fatalf("groups are not editable: %v", e)
 	}
 	p.Spec.Revoked = true
 	if e = db.Update(ctx, p); e != nil {
@@ -127,3 +162,9 @@ func TestAPISchemaAndReconcile(t *testing.T) {
 		t.Fatal("revocation reversed")
 	}
 }
+
+func question(answers ...api.RoomAnswer) *api.RoomQuestion {
+	return &api.RoomQuestion{Prompt: "Your favourite frontend framework?", Answers: answers}
+}
+
+func answer(label, group string) api.RoomAnswer { return api.RoomAnswer{Label: label, Group: group} }
